@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { startNotificationScheduler, stopNotificationScheduler, requestNotificationPermission } from "@/lib/notificationScheduler";
 import type { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -23,6 +24,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      if (session?.user) {
+        requestNotificationPermission();
+        startNotificationScheduler();
+      } else {
+        stopNotificationScheduler();
+      }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
