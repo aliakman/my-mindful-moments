@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Plus, Trash2, Clock, Bell, BellOff } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Clock, Bell, BellOff, Settings2 } from "lucide-react";
+import ReminderSettings from "@/components/ReminderSettings";
 
 interface Sentence {
   id: string;
@@ -15,14 +16,24 @@ interface Sentence {
   created_at: string;
 }
 
+interface CollectionData {
+  name: string;
+  reminder_type: string;
+  active_hours_mode: string;
+  active_hours_start: string;
+  active_hours_end: string;
+  interval_hours: number;
+}
+
 const CollectionDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user, loading } = useAuth();
-  const [collectionName, setCollectionName] = useState("");
+  const [collection, setCollection] = useState<CollectionData | null>(null);
   const [sentences, setSentences] = useState<Sentence[]>([]);
   const [newText, setNewText] = useState("");
   const [newTime, setNewTime] = useState("");
   const [showInput, setShowInput] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [adding, setAdding] = useState(false);
   const { toast } = useToast();
 
@@ -36,10 +47,10 @@ const CollectionDetail = () => {
   const fetchCollection = async () => {
     const { data } = await supabase
       .from("collections")
-      .select("name")
+      .select("name, reminder_type, active_hours_mode, active_hours_start, active_hours_end, interval_hours")
       .eq("id", id!)
       .maybeSingle();
-    if (data) setCollectionName(data.name);
+    if (data) setCollection(data);
   };
 
   const fetchSentences = async () => {
@@ -103,11 +114,34 @@ const CollectionDetail = () => {
           <Link to="/" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h1 className="truncate text-lg font-bold tracking-tight">{collectionName}</h1>
+          <h1 className="truncate text-lg font-bold tracking-tight">{collection?.name}</h1>
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className={`ml-auto rounded-lg p-1.5 transition-colors ${
+              showSettings ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <Settings2 className="h-5 w-5" />
+          </button>
         </div>
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-6">
+        {/* Reminder Settings */}
+        {showSettings && collection && (
+          <div className="mb-6">
+            <ReminderSettings
+              collectionId={id!}
+              reminderType={collection.reminder_type}
+              activeHoursMode={collection.active_hours_mode}
+              activeHoursStart={collection.active_hours_start}
+              activeHoursEnd={collection.active_hours_end}
+              intervalHours={collection.interval_hours}
+              onUpdate={fetchCollection}
+            />
+          </div>
+        )}
+
         {/* Add sentence */}
         {showInput ? (
           <div className="mb-6 space-y-3 rounded-xl bg-card p-4 animate-fade-in">

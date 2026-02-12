@@ -16,23 +16,38 @@ export type Database = {
     Tables: {
       collections: {
         Row: {
+          active_hours_end: string
+          active_hours_mode: string
+          active_hours_start: string
           created_at: string
           id: string
+          interval_hours: number
           name: string
+          reminder_type: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          active_hours_end?: string
+          active_hours_mode?: string
+          active_hours_start?: string
           created_at?: string
           id?: string
+          interval_hours?: number
           name: string
+          reminder_type?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          active_hours_end?: string
+          active_hours_mode?: string
+          active_hours_start?: string
           created_at?: string
           id?: string
+          interval_hours?: number
           name?: string
+          reminder_type?: string
           updated_at?: string
           user_id?: string
         }
