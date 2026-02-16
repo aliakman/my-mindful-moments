@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, TouchEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { BookOpen, Bell, FolderOpen, Sparkles } from "lucide-react";
 
@@ -34,19 +34,37 @@ const slides = [
 
 const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
   const [current, setCurrent] = useState(0);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
 
-  const next = () => {
-    if (current < slides.length - 1) {
-      setCurrent(current + 1);
-    } else {
-      localStorage.setItem(TUTORIAL_KEY, "true");
-      onComplete();
-    }
-  };
-
-  const skip = () => {
+  const finish = () => {
     localStorage.setItem(TUTORIAL_KEY, "true");
     onComplete();
+  };
+
+  const next = () => {
+    if (current < slides.length - 1) setCurrent(current + 1);
+    else finish();
+  };
+
+  const prev = () => {
+    if (current > 0) setCurrent(current - 1);
+  };
+
+  /* Swipe gesture handlers */
+  const handleTouchStart = (e: TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    const MIN_SWIPE = 50;
+    if (diff > MIN_SWIPE) next();       // swipe left → next
+    else if (diff < -MIN_SWIPE) prev(); // swipe right → prev
   };
 
   const slide = slides[current];
@@ -54,7 +72,12 @@ const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
   const isLast = current === slides.length - 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <div className="w-full max-w-sm px-6 animate-fade-in" key={current}>
         {/* Slide content */}
         <div className="flex flex-col items-center text-center">
@@ -68,10 +91,11 @@ const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
         {/* Dots */}
         <div className="mt-10 flex justify-center gap-2">
           {slides.map((_, i) => (
-            <div
+            <button
               key={i}
+              onClick={() => setCurrent(i)}
               className={`h-2 rounded-full transition-all ${
-                i === current ? "w-6 bg-primary" : "w-2 bg-muted-foreground/20"
+                i === current ? "w-6 bg-primary" : "w-2 bg-muted-foreground/20 hover:bg-muted-foreground/40"
               }`}
             />
           ))}
@@ -84,13 +108,20 @@ const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
           </Button>
           {!isLast && (
             <button
-              onClick={skip}
+              onClick={finish}
               className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Skip
             </button>
           )}
         </div>
+
+        {/* Swipe hint on first slide */}
+        {current === 0 && (
+          <p className="mt-6 text-center text-[11px] text-muted-foreground/50 animate-pulse">
+            Swipe to navigate
+          </p>
+        )}
       </div>
     </div>
   );

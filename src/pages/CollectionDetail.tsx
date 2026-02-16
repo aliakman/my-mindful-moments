@@ -5,8 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Plus, Trash2, Clock, Bell, BellOff, Settings2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Clock, Bell, BellOff, Settings2, Pencil, Check, X } from "lucide-react";
 import ReminderSettings from "@/components/ReminderSettings";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface Sentence {
   id: string;
@@ -35,6 +36,9 @@ const CollectionDetail = () => {
   const [showInput, setShowInput] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Sentence | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -81,8 +85,17 @@ const CollectionDetail = () => {
     setAdding(false);
   };
 
-  const deleteSentence = async (sentenceId: string) => {
-    await supabase.from("sentences").delete().eq("id", sentenceId);
+  const updateSentenceText = async (sentenceId: string) => {
+    if (!editText.trim()) return;
+    await supabase.from("sentences").update({ text: editText.trim() }).eq("id", sentenceId);
+    setEditingId(null);
+    fetchSentences();
+  };
+
+  const deleteSentence = async () => {
+    if (!deleteTarget) return;
+    await supabase.from("sentences").delete().eq("id", deleteTarget.id);
+    setDeleteTarget(null);
     fetchSentences();
   };
 
@@ -192,52 +205,133 @@ const CollectionDetail = () => {
         ) : (
           <div className="space-y-2">
             {sentences.map((s, i) => (
-              <div
+              <SentenceCard
                 key={s.id}
-                className={`group rounded-xl p-4 transition-all animate-fade-in ${
-                  s.is_active ? "bg-card" : "bg-muted/50 opacity-60"
-                }`}
-                style={{ animationDelay: `${i * 50}ms` }}
-              >
-                <div className="flex items-start gap-3">
-                  <button
-                    onClick={() => toggleActive(s.id, s.is_active)}
-                    className={`mt-0.5 shrink-0 rounded-md p-1.5 transition-colors ${
-                      s.is_active
-                        ? "bg-primary/10 text-primary"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {s.is_active ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm leading-relaxed">{s.text}</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <input
-                        type="time"
-                        value={s.reminder_time ?? ""}
-                        onChange={(e) => updateReminderTime(s.id, e.target.value)}
-                        className="h-7 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                      />
-                      {s.reminder_time && (
-                        <span className="text-xs text-muted-foreground">⏰ {s.reminder_time.slice(0, 5)}</span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => deleteSentence(s.id)}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
+                sentence={s}
+                index={i}
+                isEditing={editingId === s.id}
+                editText={editText}
+                onStartEdit={() => { setEditingId(s.id); setEditText(s.text); }}
+                onEditChange={setEditText}
+                onSaveEdit={() => updateSentenceText(s.id)}
+                onCancelEdit={() => setEditingId(null)}
+                onToggleActive={() => toggleActive(s.id, s.is_active)}
+                onUpdateTime={(time) => updateReminderTime(s.id, time)}
+                onDelete={() => setDeleteTarget(s)}
+              />
             ))}
           </div>
         )}
       </main>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete sentence?"
+        description="This sentence and its reminder will be permanently removed."
+        onConfirm={deleteSentence}
+      />
     </div>
   );
 };
+
+/** Individual sentence card — extracted for cleanliness */
+interface SentenceCardProps {
+  sentence: Sentence;
+  index: number;
+  isEditing: boolean;
+  editText: string;
+  onStartEdit: () => void;
+  onEditChange: (text: string) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onToggleActive: () => void;
+  onUpdateTime: (time: string) => void;
+  onDelete: () => void;
+}
+
+const SentenceCard = ({
+  sentence: s,
+  index,
+  isEditing,
+  editText,
+  onStartEdit,
+  onEditChange,
+  onSaveEdit,
+  onCancelEdit,
+  onToggleActive,
+  onUpdateTime,
+  onDelete,
+}: SentenceCardProps) => (
+  <div
+    className={`group rounded-xl p-4 transition-all animate-fade-in ${
+      s.is_active ? "bg-card" : "bg-muted/50 opacity-60"
+    }`}
+    style={{ animationDelay: `${index * 50}ms` }}
+  >
+    <div className="flex items-start gap-3">
+      <button
+        onClick={onToggleActive}
+        className={`mt-0.5 shrink-0 rounded-md p-1.5 transition-colors ${
+          s.is_active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+        }`}
+      >
+        {s.is_active ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+      </button>
+      <div className="min-w-0 flex-1">
+        {isEditing ? (
+          <div className="flex items-center gap-2">
+            <Input
+              value={editText}
+              onChange={(e) => onEditChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSaveEdit();
+                if (e.key === "Escape") onCancelEdit();
+              }}
+              autoFocus
+              className="h-8 text-sm bg-background"
+            />
+            <button onClick={onSaveEdit} className="p-1 text-primary hover:bg-primary/10 rounded">
+              <Check className="h-4 w-4" />
+            </button>
+            <button onClick={onCancelEdit} className="p-1 text-muted-foreground hover:bg-secondary rounded">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm leading-relaxed cursor-pointer" onClick={onStartEdit} title="Click to edit">
+            {s.text}
+          </p>
+        )}
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="time"
+            value={s.reminder_time ?? ""}
+            onChange={(e) => onUpdateTime(e.target.value)}
+            className="h-7 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          {s.reminder_time && (
+            <span className="text-xs text-muted-foreground">⏰ {s.reminder_time.slice(0, 5)}</span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        <button
+          onClick={onStartEdit}
+          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-secondary text-muted-foreground"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={onDelete}
+          className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 export default CollectionDetail;

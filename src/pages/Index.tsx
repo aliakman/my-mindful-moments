@@ -5,8 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, FolderOpen, Trash2, ChevronRight, Settings2 } from "lucide-react";
+import { Plus, FolderOpen, Trash2, ChevronRight, Settings2, Pencil, Check, X } from "lucide-react";
 import { Link } from "react-router-dom";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface Collection {
   id: string;
@@ -17,10 +19,14 @@ interface Collection {
 
 const Index = () => {
   const { user, loading } = useAuth();
+  const { isTrialActive, trialDaysLeft, isSubscribed } = useSubscription();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [showInput, setShowInput] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -34,7 +40,6 @@ const Index = () => {
       .order("created_at", { ascending: false });
 
     if (cols) {
-      // Get sentence counts
       const withCounts = await Promise.all(
         cols.map(async (c) => {
           const { count } = await supabase
@@ -65,9 +70,20 @@ const Index = () => {
     setAdding(false);
   };
 
-  const deleteCollection = async (id: string) => {
-    const { error } = await supabase.from("collections").delete().eq("id", id);
+  const renameCollection = async (id: string) => {
+    if (!editName.trim()) return;
+    const { error } = await supabase.from("collections").update({ name: editName.trim() }).eq("id", id);
+    if (!error) {
+      setEditingId(null);
+      fetchCollections();
+    }
+  };
+
+  const deleteCollection = async () => {
+    if (!deleteTarget) return;
+    const { error } = await supabase.from("collections").delete().eq("id", deleteTarget.id);
     if (!error) fetchCollections();
+    setDeleteTarget(null);
   };
 
   if (loading) {
@@ -93,6 +109,14 @@ const Index = () => {
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-6">
+        {/* Trial countdown banner */}
+        {isTrialActive && !isSubscribed && (
+          <div className="mb-4 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-center text-sm animate-fade-in">
+            <span className="text-muted-foreground">Free trial: </span>
+            <span className="font-semibold text-accent">{trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left</span>
+          </div>
+        )}
+
         {/* New collection input */}
         {showInput ? (
           <div className="mb-6 flex gap-2 animate-fade-in">
@@ -108,7 +132,7 @@ const Index = () => {
               Add
             </Button>
             <Button variant="ghost" size="sm" className="h-10" onClick={() => { setShowInput(false); setNewName(""); }}>
-              ✕
+              <X className="h-4 w-4" />
             </Button>
           </div>
         ) : (
@@ -137,29 +161,68 @@ const Index = () => {
                 className="group flex items-center gap-3 rounded-xl bg-card p-4 transition-all hover:shadow-sm animate-fade-in"
                 style={{ animationDelay: `${i * 60}ms` }}
               >
-                <Link to={`/collection/${col.id}`} className="flex flex-1 items-center gap-3 min-w-0">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <FolderOpen className="h-4 w-4" />
+                {editingId === col.id ? (
+                  /* Inline rename */
+                  <div className="flex flex-1 items-center gap-2">
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") renameCollection(col.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      autoFocus
+                      className="h-8 text-sm bg-background"
+                    />
+                    <button onClick={() => renameCollection(col.id)} className="p-1 text-primary hover:bg-primary/10 rounded">
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => setEditingId(null)} className="p-1 text-muted-foreground hover:bg-secondary rounded">
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-sm">{col.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {col.sentence_count} {col.sentence_count === 1 ? "sentence" : "sentences"}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
-                </Link>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteCollection(col.id); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                ) : (
+                  <>
+                    <Link to={`/collection/${col.id}`} className="flex flex-1 items-center gap-3 min-w-0">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <FolderOpen className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-sm">{col.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {col.sentence_count} {col.sentence_count === 1 ? "sentence" : "sentences"}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
+                    </Link>
+                    <button
+                      onClick={() => { setEditingId(col.id); setEditName(col.name); }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-secondary text-muted-foreground"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(col)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
         )}
       </main>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete collection?"
+        description={`"${deleteTarget?.name}" and all its sentences will be permanently deleted.`}
+        onConfirm={deleteCollection}
+      />
     </div>
   );
 };

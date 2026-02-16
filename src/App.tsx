@@ -18,6 +18,12 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+/** Wraps routes that require active subscription; shows paywall if expired */
+const ProtectedRoute = ({ hasAccess, children }: { hasAccess: boolean; children: React.ReactNode }) => {
+  if (!hasAccess) return <Paywall />;
+  return <>{children}</>;
+};
+
 /** Inner component that can use context providers */
 const AppContent = () => {
   const [showTutorial, setShowTutorial] = useState(() => {
@@ -26,7 +32,7 @@ const AppContent = () => {
 
   const { hasAccess } = useSubscription();
 
-  // Show onboarding first, then paywall if trial expired
+  // Show onboarding first, then the app
   if (showTutorial) {
     return <OnboardingTutorial onComplete={() => setShowTutorial(false)} />;
   }
@@ -36,16 +42,22 @@ const AppContent = () => {
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        {/* Paywall overlay blocks app if no access */}
-        {!hasAccess && <Paywall />}
         <Routes>
-          <Route path="/" element={<Index />} />
+          {/* Auth is always accessible, even when trial expired */}
           <Route path="/auth" element={<Auth />} />
+          <Route path="/" element={<ProtectedRoute hasAccess={hasAccess}><Index /></ProtectedRoute>} />
           <Route
             path="/settings"
-            element={<Settings onShowTutorial={() => setShowTutorial(true)} />}
+            element={
+              <ProtectedRoute hasAccess={hasAccess}>
+                <Settings onShowTutorial={() => setShowTutorial(true)} />
+              </ProtectedRoute>
+            }
           />
-          <Route path="/collection/:id" element={<CollectionDetail />} />
+          <Route
+            path="/collection/:id"
+            element={<ProtectedRoute hasAccess={hasAccess}><CollectionDetail /></ProtectedRoute>}
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
