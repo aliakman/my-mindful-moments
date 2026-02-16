@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, LogOut, FolderOpen, Trash2, ChevronRight } from "lucide-react";
+import { Plus, FolderOpen, Trash2, ChevronRight, Settings2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface Collection {
@@ -16,7 +16,7 @@ interface Collection {
 }
 
 const Index = () => {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
@@ -86,10 +86,9 @@ const Index = () => {
       <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-4">
           <h1 className="text-lg font-bold tracking-tight">Remind Me</h1>
-          <Button variant="ghost" size="sm" onClick={signOut} className="gap-1.5 text-muted-foreground">
-            <LogOut className="h-4 w-4" />
-            <span className="text-xs">Logout</span>
-          </Button>
+          <Link to="/settings" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary transition-colors">
+            <Settings2 className="h-5 w-5" />
+          </Link>
         </div>
       </header>
 
