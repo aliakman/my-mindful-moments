@@ -1,12 +1,15 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { useSubscription } from "@/hooks/useSubscription";
-import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sun, Moon, Monitor, BookOpen, Crown, LogOut, Bell, BellOff, Info } from "lucide-react";
+import {
+  ArrowLeft, Sun, Moon, Monitor, BookOpen, Crown, LogOut,
+  Bell, BellOff, Info, MapPin, BarChart3, Download, Upload
+} from "lucide-react";
 import { requestNotificationPermission } from "@/lib/notificationScheduler";
+import { downloadExport, importData } from "@/lib/exportImport";
 import { useToast } from "@/hooks/use-toast";
 
 interface SettingsProps {
@@ -19,6 +22,9 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
   const { isTrialActive, trialDaysLeft, isSubscribed } = useSubscription();
   const { toast } = useToast();
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if ("Notification" in window) {
@@ -53,6 +59,34 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
       title: granted ? "Notifications enabled" : "Permission denied",
       description: granted ? "You'll now receive reminders." : "Enable notifications in your device settings.",
     });
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadExport();
+      toast({ title: "Exported", description: "Your data has been downloaded." });
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    }
+    setExporting(false);
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setImporting(true);
+    try {
+      const result = await importData(file, user.id);
+      toast({
+        title: "Imported",
+        description: `${result.collections} collections and ${result.sentences} sentences added.`,
+      });
+    } catch {
+      toast({ title: "Import failed", description: "Invalid file format.", variant: "destructive" });
+    }
+    setImporting(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
@@ -114,6 +148,61 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
           </div>
         </section>
 
+        {/* Locations */}
+        <section className="rounded-xl bg-card p-4">
+          <Link to="/locations" className="flex w-full items-center gap-3 text-sm">
+            <MapPin className="h-4 w-4 text-primary" />
+            <span className="flex-1 text-left">My Locations</span>
+            <span className="text-xs text-muted-foreground">Manage saved places</span>
+          </Link>
+        </section>
+
+        {/* Statistics */}
+        <section className="rounded-xl bg-card p-4">
+          <Link to="/statistics" className="flex w-full items-center gap-3 text-sm">
+            <BarChart3 className="h-4 w-4 text-primary" />
+            <span className="flex-1 text-left">Statistics</span>
+            <span className="text-xs text-muted-foreground">View activity overview</span>
+          </Link>
+        </section>
+
+        {/* Export / Import */}
+        <section className="rounded-xl bg-card p-4 space-y-3">
+          <h3 className="text-sm font-semibold">Data</h3>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex-1 gap-2"
+            >
+              <Download className="h-4 w-4" />
+              {exporting ? "Exporting..." : "Export"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="flex-1 gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              {importing ? "Importing..." : "Import"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              className="hidden"
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Export your collections as JSON or import from a backup file.
+          </p>
+        </section>
+
         {/* Subscription Status */}
         <section className="rounded-xl bg-card p-4 space-y-2">
           <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -167,8 +256,8 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
             About
           </h3>
           <div className="text-xs text-muted-foreground space-y-1">
-            <p>Remind Me — v1.0.0</p>
-            <p>Your personal sentence reminder app.</p>
+            <p>Remind Me — v1.1.0</p>
+            <p>Your personal sentence reminder app with location-based triggers.</p>
             <p className="pt-1 text-muted-foreground/60">© {new Date().getFullYear()} Remind Me</p>
           </div>
         </section>

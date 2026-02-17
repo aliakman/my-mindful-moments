@@ -13,6 +13,10 @@ const config: CapacitorConfig = {
       smallIcon: 'ic_stat_icon_config_sample',
       iconColor: '#CE8C5B',
     },
+    Geolocation: {
+      // iOS: Will use NSLocationWhenInUseUsageDescription
+      // Android: ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION
+    },
   },
 };
 

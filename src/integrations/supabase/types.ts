@@ -59,6 +59,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          location_id: string | null
           reminder_time: string | null
           text: string
           updated_at: string
@@ -68,6 +69,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          location_id?: string | null
           reminder_time?: string | null
           text: string
           updated_at?: string
@@ -77,6 +79,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          location_id?: string | null
           reminder_time?: string | null
           text?: string
           updated_at?: string
@@ -89,7 +92,47 @@ export type Database = {
             referencedRelation: "collections"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sentences_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "user_locations"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      user_locations: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_meters: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          name: string
+          radius_meters?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          name?: string
+          radius_meters?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
