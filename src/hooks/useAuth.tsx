@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { startNotificationScheduler, stopNotificationScheduler, requestNotificationPermission } from "@/lib/notificationScheduler";
+import { startLocationChecker, stopLocationChecker } from "@/lib/locationChecker";
 import type { Session, User } from "@supabase/supabase-js";
 
 interface AuthContextType {
@@ -27,8 +28,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (session?.user) {
         requestNotificationPermission();
         startNotificationScheduler();
+        startLocationChecker(); // Start geofence monitoring
       } else {
         stopNotificationScheduler();
+        stopLocationChecker();
       }
     });
 

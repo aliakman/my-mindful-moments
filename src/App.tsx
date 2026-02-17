@@ -14,6 +14,8 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Settings from "./pages/Settings";
 import CollectionDetail from "./pages/CollectionDetail";
+import Locations from "./pages/Locations";
+import Statistics from "./pages/Statistics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,7 +34,6 @@ const AppContent = () => {
 
   const { hasAccess } = useSubscription();
 
-  // Show onboarding first, then the app
   if (showTutorial) {
     return <OnboardingTutorial onComplete={() => setShowTutorial(false)} />;
   }
@@ -43,7 +44,6 @@ const AppContent = () => {
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Auth is always accessible, even when trial expired */}
           <Route path="/auth" element={<Auth />} />
           <Route path="/" element={<ProtectedRoute hasAccess={hasAccess}><Index /></ProtectedRoute>} />
           <Route
@@ -57,6 +57,14 @@ const AppContent = () => {
           <Route
             path="/collection/:id"
             element={<ProtectedRoute hasAccess={hasAccess}><CollectionDetail /></ProtectedRoute>}
+          />
+          <Route
+            path="/locations"
+            element={<ProtectedRoute hasAccess={hasAccess}><Locations /></ProtectedRoute>}
+          />
+          <Route
+            path="/statistics"
+            element={<ProtectedRoute hasAccess={hasAccess}><Statistics /></ProtectedRoute>}
           />
           <Route path="*" element={<NotFound />} />
         </Routes>

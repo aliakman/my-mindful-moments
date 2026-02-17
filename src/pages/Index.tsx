@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, FolderOpen, Trash2, ChevronRight, Settings2, Pencil, Check, X } from "lucide-react";
+import { Plus, FolderOpen, Trash2, ChevronRight, Settings2, Pencil, Check, X, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -27,6 +27,8 @@ const Index = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Collection | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -86,6 +88,11 @@ const Index = () => {
     setDeleteTarget(null);
   };
 
+  // Filter collections by search
+  const filtered = searchQuery
+    ? collections.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : collections;
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -102,10 +109,32 @@ const Index = () => {
       <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-4">
           <h1 className="text-lg font-bold tracking-tight">Remind Me</h1>
-          <Link to="/settings" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary transition-colors">
-            <Settings2 className="h-5 w-5" />
-          </Link>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowSearch(!showSearch)}
+              className={`rounded-lg p-1.5 transition-colors ${
+                showSearch ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              <Search className="h-5 w-5" />
+            </button>
+            <Link to="/settings" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary transition-colors">
+              <Settings2 className="h-5 w-5" />
+            </Link>
+          </div>
         </div>
+        {/* Search bar */}
+        {showSearch && (
+          <div className="mx-auto max-w-lg px-4 pb-3 animate-fade-in">
+            <Input
+              placeholder="Search collections..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+              className="h-9 bg-card text-sm"
+            />
+          </div>
+        )}
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-6">
@@ -147,22 +176,25 @@ const Index = () => {
         )}
 
         {/* Collections list */}
-        {collections.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="mt-20 text-center animate-fade-in">
             <FolderOpen className="mx-auto h-12 w-12 text-muted-foreground/40" />
-            <p className="mt-3 text-sm text-muted-foreground">No collections yet</p>
-            <p className="text-xs text-muted-foreground/60">Create one to start adding sentences</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {searchQuery ? "No matching collections" : "No collections yet"}
+            </p>
+            {!searchQuery && (
+              <p className="text-xs text-muted-foreground/60">Create one to start adding sentences</p>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
-            {collections.map((col, i) => (
+            {filtered.map((col, i) => (
               <div
                 key={col.id}
                 className="group flex items-center gap-3 rounded-xl bg-card p-4 transition-all hover:shadow-sm animate-fade-in"
                 style={{ animationDelay: `${i * 60}ms` }}
               >
                 {editingId === col.id ? (
-                  /* Inline rename */
                   <div className="flex flex-1 items-center gap-2">
                     <Input
                       value={editName}
@@ -215,7 +247,6 @@ const Index = () => {
         )}
       </main>
 
-      {/* Delete confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
