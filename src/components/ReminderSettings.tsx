@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import ReminderPresets, { REMINDER_PRESETS } from "@/components/ReminderPresets";
 
 interface ReminderSettingsProps {
   collectionId: string;
@@ -18,10 +19,10 @@ interface ReminderSettingsProps {
 }
 
 const REMINDER_TYPES = [
-  { value: "none", label: "Off", icon: BellOff, description: "No reminders" },
-  { value: "fixed", label: "Fixed Time", icon: Clock, description: "Each sentence at its set time" },
-  { value: "random", label: "Random", icon: Shuffle, description: "Random sentence at random times" },
-  { value: "random_interval", label: "Interval", icon: Timer, description: "Random sentence every N hours" },
+  { value: "none",            label: "Off",       icon: BellOff, description: "No reminders" },
+  { value: "fixed",           label: "Fixed Time", icon: Clock,   description: "Each sentence at its set time" },
+  { value: "random",          label: "Random",    icon: Shuffle, description: "Random sentence, random times" },
+  { value: "random_interval", label: "Interval",  icon: Timer,   description: "Random sentence every N hours" },
 ];
 
 const ReminderSettings = ({
@@ -37,9 +38,19 @@ const ReminderSettings = ({
   const [hoursMode, setHoursMode] = useState(activeHoursMode);
   const [startTime, setStartTime] = useState(activeHoursStart?.slice(0, 5) || "08:00");
   const [endTime, setEndTime] = useState(activeHoursEnd?.slice(0, 5) || "22:00");
-  const [interval, setInterval] = useState(intervalHours);
+  const [interval, setIntervalHours] = useState(intervalHours);
   const [saving, setSaving] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
   const { toast } = useToast();
+
+  const applyPreset = (config: (typeof REMINDER_PRESETS)[0]["config"]) => {
+    setType(config.reminder_type);
+    setHoursMode(config.active_hours_mode);
+    setStartTime(config.active_hours_start);
+    setEndTime(config.active_hours_end);
+    setIntervalHours(config.interval_hours);
+    setShowPresets(false);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -57,7 +68,7 @@ const ReminderSettings = ({
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Saved", description: "Reminder settings updated" });
+      toast({ title: "Saved ✓", description: "Reminder settings updated." });
       onUpdate();
     }
     setSaving(false);
@@ -66,13 +77,26 @@ const ReminderSettings = ({
   const showActiveHours = type === "random" || type === "random_interval";
 
   return (
-    <div className="space-y-4 rounded-xl bg-card p-4 animate-fade-in">
-      <h3 className="text-sm font-semibold flex items-center gap-2">
-        <Bell className="h-4 w-4 text-primary" />
-        Reminder Settings
-      </h3>
+    <div className="space-y-4 rounded-xl bg-card border border-border/60 p-4 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <Bell className="h-4 w-4 text-primary" />
+          Reminder Settings
+        </h3>
+        <button
+          onClick={() => setShowPresets(!showPresets)}
+          className="text-xs text-primary underline-offset-2 hover:underline"
+        >
+          {showPresets ? "Hide presets" : "Quick presets"}
+        </button>
+      </div>
 
-      {/* Reminder Type */}
+      {/* Quick Presets */}
+      {showPresets && (
+        <ReminderPresets onSelect={applyPreset} currentType={type} />
+      )}
+
+      {/* Reminder Type selector */}
       <div className="grid grid-cols-2 gap-2">
         {REMINDER_TYPES.map((rt) => {
           const Icon = rt.icon;
@@ -80,23 +104,23 @@ const ReminderSettings = ({
             <button
               key={rt.value}
               onClick={() => setType(rt.value)}
-              className={`flex items-center gap-2 rounded-lg border p-3 text-left text-xs transition-all ${
+              className={`flex items-center gap-2 rounded-xl border p-3 text-left text-xs transition-all ${
                 type === rt.value
-                  ? "border-primary bg-primary/5 text-foreground"
-                  : "border-border text-muted-foreground hover:border-primary/30"
+                  ? "border-primary bg-primary/8 text-foreground"
+                  : "border-border text-muted-foreground hover:border-primary/30 hover:bg-secondary/50"
               }`}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <Icon className={`h-3.5 w-3.5 shrink-0 ${type === rt.value ? "text-primary" : ""}`} />
               <div>
                 <p className="font-medium">{rt.label}</p>
-                <p className="text-[10px] opacity-70">{rt.description}</p>
+                <p className="text-[10px] opacity-70 leading-tight">{rt.description}</p>
               </div>
             </button>
           );
         })}
       </div>
 
-      {/* Interval slider (for random_interval) */}
+      {/* Interval slider */}
       {type === "random_interval" && (
         <div className="space-y-2">
           <label className="text-xs text-muted-foreground">
@@ -104,15 +128,15 @@ const ReminderSettings = ({
           </label>
           <Slider
             value={[interval]}
-            onValueChange={(v) => setInterval(v[0])}
+            onValueChange={(v) => setIntervalHours(v[0])}
             min={1}
-            max={12}
+            max={24}
             step={1}
           />
           <div className="flex justify-between text-[10px] text-muted-foreground">
             <span>1h</span>
-            <span>6h</span>
             <span>12h</span>
+            <span>24h</span>
           </div>
         </div>
       )}

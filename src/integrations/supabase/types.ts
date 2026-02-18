@@ -23,6 +23,7 @@ export type Database = {
           id: string
           interval_hours: number
           name: string
+          preset_type: string | null
           reminder_type: string
           updated_at: string
           user_id: string
@@ -35,6 +36,7 @@ export type Database = {
           id?: string
           interval_hours?: number
           name: string
+          preset_type?: string | null
           reminder_type?: string
           updated_at?: string
           user_id: string
@@ -47,6 +49,7 @@ export type Database = {
           id?: string
           interval_hours?: number
           name?: string
+          preset_type?: string | null
           reminder_type?: string
           updated_at?: string
           user_id?: string
@@ -60,7 +63,9 @@ export type Database = {
           id: string
           is_active: boolean
           location_id: string | null
+          location_trigger_type: string
           reminder_time: string | null
+          scheduled_date: string | null
           text: string
           updated_at: string
         }
@@ -70,7 +75,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           location_id?: string | null
+          location_trigger_type?: string
           reminder_time?: string | null
+          scheduled_date?: string | null
           text: string
           updated_at?: string
         }
@@ -80,7 +87,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           location_id?: string | null
+          location_trigger_type?: string
           reminder_time?: string | null
+          scheduled_date?: string | null
           text?: string
           updated_at?: string
         }
@@ -103,6 +112,7 @@ export type Database = {
       }
       user_locations: {
         Row: {
+          color: string
           created_at: string
           id: string
           latitude: number
@@ -113,6 +123,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          color?: string
           created_at?: string
           id?: string
           latitude: number
@@ -123,6 +134,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          color?: string
           created_at?: string
           id?: string
           latitude?: number

@@ -6,7 +6,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Clock, Bell, BellOff, Settings2, Pencil, Check, X, MapPin, Search } from "lucide-react";
+import {
+  ArrowLeft, Plus, Trash2, Clock, Bell, BellOff, Settings2,
+  Pencil, Check, X, MapPin, Search, LogIn, LogOut
+} from "lucide-react";
 import ReminderSettings from "@/components/ReminderSettings";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -17,6 +20,7 @@ interface Sentence {
   is_active: boolean;
   created_at: string;
   location_id: string | null;
+  location_trigger_type: string;
 }
 
 interface CollectionData {
@@ -31,6 +35,7 @@ interface CollectionData {
 interface UserLocation {
   id: string;
   name: string;
+  color: string;
 }
 
 const CollectionDetail = () => {
@@ -42,6 +47,7 @@ const CollectionDetail = () => {
   const [newText, setNewText] = useState("");
   const [newTime, setNewTime] = useState("");
   const [newLocationId, setNewLocationId] = useState<string>("");
+  const [newTriggerType, setNewTriggerType] = useState<string>("arrive");
   const [showInput, setShowInput] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -72,18 +78,18 @@ const CollectionDetail = () => {
   const fetchSentences = async () => {
     const { data } = await supabase
       .from("sentences")
-      .select("*")
+      .select("id, text, reminder_time, is_active, created_at, location_id, location_trigger_type")
       .eq("collection_id", id!)
       .order("created_at", { ascending: false });
-    if (data) setSentences(data);
+    if (data) setSentences(data as Sentence[]);
   };
 
   const fetchLocations = async () => {
     const { data } = await supabase
       .from("user_locations")
-      .select("id, name")
+      .select("id, name, color")
       .order("name");
-    if (data) setLocations(data);
+    if (data) setLocations(data as UserLocation[]);
   };
 
   const addSentence = async () => {
@@ -94,6 +100,7 @@ const CollectionDetail = () => {
       text: newText.trim(),
       reminder_time: newTime || null,
       location_id: newLocationId || null,
+      location_trigger_type: newTriggerType,
     });
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -101,6 +108,7 @@ const CollectionDetail = () => {
       setNewText("");
       setNewTime("");
       setNewLocationId("");
+      setNewTriggerType("arrive");
       setShowInput(false);
       fetchSentences();
     }
@@ -136,9 +144,17 @@ const CollectionDetail = () => {
     fetchSentences();
   };
 
+  const updateTriggerType = async (sentenceId: string, triggerType: string) => {
+    await supabase.from("sentences").update({ location_trigger_type: triggerType }).eq("id", sentenceId);
+    fetchSentences();
+  };
+
   const filtered = searchQuery
     ? sentences.filter((s) => s.text.toLowerCase().includes(searchQuery.toLowerCase()))
     : sentences;
+
+  // Only show time picker under sentences when collection is fixed-time type
+  const showTimeUnderSentences = collection?.reminder_type === "fixed";
 
   if (loading) {
     return (
@@ -158,8 +174,18 @@ const CollectionDetail = () => {
           <Link to="/" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h1 className="truncate text-lg font-bold tracking-tight">{collection?.name}</h1>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="flex-1 min-w-0">
+            <h1 className="truncate text-lg font-bold tracking-tight">{collection?.name}</h1>
+            {collection && (
+              <p className="text-[11px] text-muted-foreground leading-none mt-0.5 capitalize">
+                {collection.reminder_type === "none" ? "No reminder" :
+                 collection.reminder_type === "fixed" ? "Fixed time" :
+                 collection.reminder_type === "random_interval" ? "Interval" :
+                 collection.reminder_type}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setShowSearch(!showSearch)}
               className={`rounded-lg p-1.5 transition-colors ${
@@ -194,7 +220,7 @@ const CollectionDetail = () => {
       <main className="mx-auto max-w-lg px-4 py-6">
         {/* Reminder Settings */}
         {showSettings && collection && (
-          <div className="mb-6">
+          <div className="mb-6 animate-fade-in">
             <ReminderSettings
               collectionId={id!}
               reminderType={collection.reminder_type}
@@ -207,9 +233,9 @@ const CollectionDetail = () => {
           </div>
         )}
 
-        {/* Add sentence */}
+        {/* Add sentence form */}
         {showInput ? (
-          <div className="mb-6 space-y-3 rounded-xl bg-card p-4 animate-fade-in">
+          <div className="mb-6 space-y-3 rounded-xl bg-card border border-border/60 p-4 animate-fade-in">
             <Input
               placeholder="Write your sentence..."
               value={newText}
@@ -217,38 +243,81 @@ const CollectionDetail = () => {
               autoFocus
               className="bg-background"
             />
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <Input
-                type="time"
-                value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
-                className="h-9 w-36 bg-background text-sm"
-              />
-              <span className="text-xs text-muted-foreground">Time</span>
-            </div>
-            {/* Location picker */}
-            {locations.length > 0 && (
+
+            {/* Time — only if collection is fixed type */}
+            {showTimeUnderSentences && (
               <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <Select value={newLocationId} onValueChange={setNewLocationId}>
-                  <SelectTrigger className="h-9 flex-1 bg-background text-sm">
-                    <SelectValue placeholder="No location trigger" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">No location</SelectItem>
-                    {locations.map((loc) => (
-                      <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Input
+                  type="time"
+                  value={newTime}
+                  onChange={(e) => setNewTime(e.target.value)}
+                  className="h-9 w-36 bg-background text-sm"
+                />
+                <span className="text-xs text-muted-foreground">Reminder time</span>
               </div>
             )}
+
+            {/* Location picker */}
+            {locations.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Select value={newLocationId} onValueChange={setNewLocationId}>
+                    <SelectTrigger className="h-9 flex-1 bg-background text-sm">
+                      <SelectValue placeholder="No location trigger" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No location</SelectItem>
+                      {locations.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full inline-block" style={{ backgroundColor: loc.color }} />
+                            {loc.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Trigger type (arrive/leave) — only if location selected */}
+                {newLocationId && (
+                  <div className="ml-6 flex gap-2">
+                    <button
+                      onClick={() => setNewTriggerType("arrive")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-1.5 text-xs font-medium transition-all ${
+                        newTriggerType === "arrive"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:border-primary/30"
+                      }`}
+                    >
+                      <LogIn className="h-3 w-3" /> Arrive
+                    </button>
+                    <button
+                      onClick={() => setNewTriggerType("leave")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-1.5 text-xs font-medium transition-all ${
+                        newTriggerType === "leave"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:border-primary/30"
+                      }`}
+                    >
+                      <LogOut className="h-3 w-3" /> Leave
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button onClick={addSentence} disabled={adding} size="sm" className="px-4">
                 Save
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => { setShowInput(false); setNewText(""); setNewTime(""); setNewLocationId(""); }}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setShowInput(false); setNewText(""); setNewTime(""); setNewLocationId(""); }}
+              >
                 Cancel
               </Button>
             </div>
@@ -272,7 +341,7 @@ const CollectionDetail = () => {
               {searchQuery ? "No matching sentences" : "No sentences yet"}
             </p>
             {!searchQuery && (
-              <p className="text-xs text-muted-foreground/60">Add your first reminder sentence</p>
+              <p className="text-xs text-muted-foreground/60">Add your first reminder sentence above</p>
             )}
           </div>
         ) : (
@@ -285,6 +354,7 @@ const CollectionDetail = () => {
                 locations={locations}
                 isEditing={editingId === s.id}
                 editText={editText}
+                showTimeControl={showTimeUnderSentences}
                 onStartEdit={() => { setEditingId(s.id); setEditText(s.text); }}
                 onEditChange={setEditText}
                 onSaveEdit={() => updateSentenceText(s.id)}
@@ -292,6 +362,7 @@ const CollectionDetail = () => {
                 onToggleActive={() => toggleActive(s.id, s.is_active)}
                 onUpdateTime={(time) => updateReminderTime(s.id, time)}
                 onUpdateLocation={(locId) => updateLocation(s.id, locId)}
+                onUpdateTriggerType={(t) => updateTriggerType(s.id, t)}
                 onDelete={() => setDeleteTarget(s)}
               />
             ))}
@@ -317,6 +388,7 @@ interface SentenceCardProps {
   locations: UserLocation[];
   isEditing: boolean;
   editText: string;
+  showTimeControl: boolean;
   onStartEdit: () => void;
   onEditChange: (text: string) => void;
   onSaveEdit: () => void;
@@ -324,6 +396,7 @@ interface SentenceCardProps {
   onToggleActive: () => void;
   onUpdateTime: (time: string) => void;
   onUpdateLocation: (locationId: string) => void;
+  onUpdateTriggerType: (triggerType: string) => void;
   onDelete: () => void;
 }
 
@@ -333,6 +406,7 @@ const SentenceCard = ({
   locations,
   isEditing,
   editText,
+  showTimeControl,
   onStartEdit,
   onEditChange,
   onSaveEdit,
@@ -340,26 +414,33 @@ const SentenceCard = ({
   onToggleActive,
   onUpdateTime,
   onUpdateLocation,
+  onUpdateTriggerType,
   onDelete,
 }: SentenceCardProps) => {
-  const locationName = locations.find((l) => l.id === s.location_id)?.name;
+  const location = locations.find((l) => l.id === s.location_id);
 
   return (
     <div
-      className={`group rounded-xl p-4 transition-all animate-fade-in ${
-        s.is_active ? "bg-card" : "bg-muted/50 opacity-60"
+      className={`group rounded-xl border p-4 transition-all animate-fade-in ${
+        s.is_active
+          ? "bg-card border-border/50"
+          : "bg-muted/30 border-border/30 opacity-60"
       }`}
-      style={{ animationDelay: `${index * 50}ms` }}
+      style={{ animationDelay: `${index * 40}ms` }}
     >
       <div className="flex items-start gap-3">
+        {/* Active toggle */}
         <button
           onClick={onToggleActive}
-          className={`mt-0.5 shrink-0 rounded-md p-1.5 transition-colors ${
-            s.is_active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+          className={`mt-0.5 shrink-0 rounded-lg p-1.5 transition-colors ${
+            s.is_active
+              ? "bg-primary/10 text-primary"
+              : "bg-muted text-muted-foreground"
           }`}
         >
           {s.is_active ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
         </button>
+
         <div className="min-w-0 flex-1">
           {isEditing ? (
             <div className="flex items-center gap-2">
@@ -381,45 +462,106 @@ const SentenceCard = ({
               </button>
             </div>
           ) : (
-            <p className="text-sm leading-relaxed cursor-pointer" onClick={onStartEdit} title="Click to edit">
+            <p
+              className="text-sm leading-relaxed cursor-pointer hover:text-primary transition-colors"
+              onClick={onStartEdit}
+              title="Click to edit"
+            >
               {s.text}
             </p>
           )}
+
+          {/* Meta row: time + location badges */}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <input
-              type="time"
-              value={s.reminder_time ?? ""}
-              onChange={(e) => onUpdateTime(e.target.value)}
-              className="h-7 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-            {s.reminder_time && (
-              <span className="text-xs text-muted-foreground">⏰ {s.reminder_time.slice(0, 5)}</span>
+            {/* Time picker — only for fixed time collections */}
+            {showTimeControl && (
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                <input
+                  type="time"
+                  value={s.reminder_time ?? ""}
+                  onChange={(e) => onUpdateTime(e.target.value)}
+                  className="h-6 rounded-md border border-border bg-background px-1.5 text-[11px] text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
             )}
-            {/* Location badge */}
-            {locationName && (
-              <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                <MapPin className="h-3 w-3" />
-                {locationName}
+
+            {/* Fixed time badge (when NOT in fixed mode — show read-only) */}
+            {!showTimeControl && s.reminder_time && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary font-medium">
+                <Clock className="h-3 w-3" />
+                {s.reminder_time.slice(0, 5)}
+              </span>
+            )}
+
+            {/* Location badge with color dot */}
+            {location && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                style={{
+                  backgroundColor: `${location.color}20`,
+                  color: location.color,
+                }}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: location.color }} />
+                {location.name}
+                {s.location_trigger_type === "leave" ? (
+                  <LogOut className="h-2.5 w-2.5 ml-0.5" />
+                ) : (
+                  <LogIn className="h-2.5 w-2.5 ml-0.5" />
+                )}
               </span>
             )}
           </div>
-          {/* Location selector (shown on hover/tap) */}
+
+          {/* Location selector (on hover) */}
           {locations.length > 0 && (
-            <div className="mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <select
-                value={s.location_id ?? ""}
-                onChange={(e) => onUpdateLocation(e.target.value)}
-                className="h-6 rounded border border-border bg-background px-1 text-[10px] text-muted-foreground focus:outline-none"
-              >
-                <option value="">No location</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>{loc.name}</option>
-                ))}
-              </select>
+            <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity space-y-1.5">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                <select
+                  value={s.location_id ?? ""}
+                  onChange={(e) => onUpdateLocation(e.target.value)}
+                  className="h-6 flex-1 rounded border border-border bg-background px-1 text-[11px] text-muted-foreground focus:outline-none"
+                >
+                  <option value="">No location</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Arrive / Leave toggle — only when location is set */}
+              {s.location_id && (
+                <div className="ml-5 flex gap-1.5">
+                  <button
+                    onClick={() => onUpdateTriggerType("arrive")}
+                    className={`flex flex-1 items-center justify-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-all ${
+                      s.location_trigger_type !== "leave"
+                        ? "border-primary/50 bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <LogIn className="h-2.5 w-2.5" /> Arrive
+                  </button>
+                  <button
+                    onClick={() => onUpdateTriggerType("leave")}
+                    className={`flex flex-1 items-center justify-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-all ${
+                      s.location_trigger_type === "leave"
+                        ? "border-primary/50 bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <LogOut className="h-2.5 w-2.5" /> Leave
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-1">
+
+        {/* Action buttons */}
+        <div className="flex flex-col gap-0.5">
           <button
             onClick={onStartEdit}
             className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-secondary text-muted-foreground"

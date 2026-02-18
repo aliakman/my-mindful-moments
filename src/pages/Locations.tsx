@@ -1,6 +1,6 @@
 /**
- * Locations — Manage saved places (Home, Work, etc.) for location-based reminders.
- * Users can add a location by tapping "Use Current Location" or entering coordinates manually.
+ * Locations — Manage saved places for location-based reminders.
+ * Supports colored dot indicators, trigger type (arrive/leave), and custom radius.
  */
 import { useState, useEffect } from "react";
 import { Link, Navigate } from "react-router-dom";
@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { ArrowLeft, Plus, MapPin, Trash2, Navigation, X } from "lucide-react";
+import { ArrowLeft, Plus, MapPin, Trash2, Navigation } from "lucide-react";
+import { LOCATION_COLORS, getNextColor } from "@/lib/locationColors";
 
 interface UserLocation {
   id: string;
@@ -20,6 +21,7 @@ interface UserLocation {
   latitude: number;
   longitude: number;
   radius_meters: number;
+  color: string;
 }
 
 const Locations = () => {
@@ -31,6 +33,7 @@ const Locations = () => {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [radius, setRadius] = useState(200);
+  const [selectedColor, setSelectedColor] = useState(LOCATION_COLORS[0]);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserLocation | null>(null);
   const { toast } = useToast();
@@ -44,20 +47,25 @@ const Locations = () => {
       .from("user_locations")
       .select("*")
       .order("created_at", { ascending: false });
-    if (data) setLocations(data);
+    if (data) {
+      setLocations(data as UserLocation[]);
+    }
   };
 
-  const useCurrentLocation = () => {
-    requestPosition();
-  };
-
-  // Fill form with current position when available
+  // Auto-fill form when position is available
   useEffect(() => {
     if (position && showForm && !lat && !lng) {
       setLat(position.latitude.toFixed(6));
       setLng(position.longitude.toFixed(6));
     }
   }, [position, showForm]);
+
+  // Auto-pick next unused color when opening form
+  useEffect(() => {
+    if (showForm) {
+      setSelectedColor(getNextColor(locations.map((l) => l.color)));
+    }
+  }, [showForm]);
 
   const saveLocation = async () => {
     if (!name.trim() || !lat || !lng || !user) return;
@@ -68,6 +76,7 @@ const Locations = () => {
       latitude: parseFloat(lat),
       longitude: parseFloat(lng),
       radius_meters: radius,
+      color: selectedColor,
     });
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -110,7 +119,12 @@ const Locations = () => {
           <Link to="/settings" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary transition-colors">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h1 className="text-lg font-bold tracking-tight">My Locations</h1>
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">My Locations</h1>
+            <p className="text-[11px] text-muted-foreground leading-none mt-0.5">
+              {locations.length} saved place{locations.length !== 1 ? "s" : ""}
+            </p>
+          </div>
         </div>
       </header>
 
@@ -118,25 +132,43 @@ const Locations = () => {
         {/* Permission banner */}
         {permissionStatus === "denied" && (
           <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive animate-fade-in">
-            Location access denied. Please enable it in your device settings to use location-based reminders.
+            📍 Location access denied. Enable it in your device settings to use location-based reminders.
           </div>
         )}
 
-        {/* Add location form */}
+        {/* Add form */}
         {showForm ? (
-          <div className="mb-6 space-y-3 rounded-xl bg-card p-4 animate-fade-in">
+          <div className="mb-6 space-y-4 rounded-xl bg-card p-4 border border-border animate-fade-in">
             <Input
-              placeholder="Location name (e.g., Home, Work)"
+              placeholder="Location name (e.g., Home, Work, Gym)"
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
               className="bg-background"
             />
 
+            {/* Color picker */}
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Color indicator</p>
+              <div className="flex gap-2 flex-wrap">
+                {LOCATION_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setSelectedColor(color)}
+                    className={`h-7 w-7 rounded-full transition-all ${
+                      selectedColor === color ? "ring-2 ring-offset-2 ring-foreground/30 scale-110" : "opacity-70 hover:opacity-100"
+                    }`}
+                    style={{ backgroundColor: color }}
+                    aria-label={`Select color ${color}`}
+                  />
+                ))}
+              </div>
+            </div>
+
             <Button
               variant="outline"
               size="sm"
-              onClick={useCurrentLocation}
+              onClick={() => requestPosition()}
               disabled={geoLoading}
               className="w-full gap-2"
             >
@@ -169,7 +201,8 @@ const Locations = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
+            {/* Trigger type */}
+            <div className="space-y-1.5">
               <label className="text-xs text-muted-foreground">
                 Trigger radius: <span className="font-semibold text-foreground">{radius}m</span>
               </label>
@@ -219,16 +252,22 @@ const Locations = () => {
             {locations.map((loc, i) => (
               <div
                 key={loc.id}
-                className="group flex items-center gap-3 rounded-xl bg-card p-4 animate-fade-in"
+                className="group flex items-center gap-3 rounded-xl bg-card p-4 animate-fade-in border border-border/50"
                 style={{ animationDelay: `${i * 50}ms` }}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <MapPin className="h-4 w-4" />
+                {/* Color dot */}
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: `${loc.color}20` }}
+                >
+                  <div className="h-4 w-4 rounded-full" style={{ backgroundColor: loc.color }} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{loc.name}</p>
+                  <p className="font-semibold text-sm truncate">{loc.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)} · {loc.radius_meters}m radius
+                    {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
+                    <span className="mx-1">·</span>
+                    <span>{loc.radius_meters}m radius</span>
                   </p>
                 </div>
                 <button
@@ -240,6 +279,13 @@ const Locations = () => {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Tip */}
+        {locations.length > 0 && (
+          <p className="mt-4 text-center text-[11px] text-muted-foreground/60">
+            Tip: Assign these locations to sentences in your collections for automatic location-based reminders.
+          </p>
         )}
       </main>
 
