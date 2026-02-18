@@ -6,15 +6,62 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Sun, Moon, Monitor, BookOpen, Crown, LogOut,
-  Bell, BellOff, Info, MapPin, BarChart3, Download, Upload
+  Bell, BellOff, Info, MapPin, BarChart3, Download, Upload,
+  Database, Sparkles
 } from "lucide-react";
 import { requestNotificationPermission } from "@/lib/notificationScheduler";
 import { downloadExport, importData } from "@/lib/exportImport";
+import { seedSampleData } from "@/lib/sampleData";
 import { useToast } from "@/hooks/use-toast";
 
 interface SettingsProps {
   onShowTutorial: () => void;
 }
+
+const SettingsRow = ({
+  icon: Icon,
+  label,
+  description,
+  onClick,
+  href,
+  right,
+  iconColor = "text-primary",
+}: {
+  icon: React.ElementType;
+  label: string;
+  description?: string;
+  onClick?: () => void;
+  href?: string;
+  right?: React.ReactNode;
+  iconColor?: string;
+}) => {
+  const inner = (
+    <div className="flex items-center gap-3 w-full">
+      <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-muted ${iconColor}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium">{label}</p>
+        {description && <p className="text-xs text-muted-foreground truncate">{description}</p>}
+      </div>
+      {right}
+    </div>
+  );
+
+  if (href) {
+    return (
+      <Link to={href} className="block p-3 rounded-xl hover:bg-secondary/60 transition-colors">
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button onClick={onClick} className="block w-full p-3 rounded-xl hover:bg-secondary/60 transition-colors text-left">
+      {inner}
+    </button>
+  );
+};
 
 const Settings = ({ onShowTutorial }: SettingsProps) => {
   const { user, loading, signOut } = useAuth();
@@ -24,6 +71,7 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -42,21 +90,15 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  const themeOptions = [
-    { value: "light" as const, label: "Light", icon: Sun },
-    { value: "dark" as const, label: "Dark", icon: Moon },
-    { value: "system" as const, label: "System", icon: Monitor },
-  ];
-
   const handleNotifToggle = async () => {
     if (notifPermission === "granted") {
-      toast({ title: "Notifications enabled", description: "To disable, change browser/device settings." });
+      toast({ title: "Notifications enabled", description: "To disable, change your device settings." });
       return;
     }
     const granted = await requestNotificationPermission();
     setNotifPermission(granted ? "granted" : "denied");
     toast({
-      title: granted ? "Notifications enabled" : "Permission denied",
+      title: granted ? "Notifications enabled ✓" : "Permission denied",
       description: granted ? "You'll now receive reminders." : "Enable notifications in your device settings.",
     });
   };
@@ -65,7 +107,7 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
     setExporting(true);
     try {
       await downloadExport();
-      toast({ title: "Exported", description: "Your data has been downloaded." });
+      toast({ title: "Exported ✓", description: "Your data has been downloaded." });
     } catch {
       toast({ title: "Export failed", variant: "destructive" });
     }
@@ -79,7 +121,7 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
     try {
       const result = await importData(file, user.id);
       toast({
-        title: "Imported",
+        title: "Imported ✓",
         description: `${result.collections} collections and ${result.sentences} sentences added.`,
       });
     } catch {
@@ -88,6 +130,28 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
     setImporting(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  const handleSeedData = async () => {
+    setSeeding(true);
+    try {
+      const result = await seedSampleData(user.id);
+      toast({
+        title: "Sample data added ✓",
+        description: `${result.collections} collections and ${result.sentences} sentences created.`,
+      });
+    } catch {
+      toast({ title: "Failed to add sample data", variant: "destructive" });
+    }
+    setSeeding(false);
+  };
+
+  const themeOptions = [
+    { value: "light" as const, label: "Light", icon: Sun },
+    { value: "dark" as const, label: "Dark", icon: Moon },
+    { value: "system" as const, label: "System", icon: Monitor },
+  ];
+
+  const trialProgress = ((7 - trialDaysLeft) / 7) * 100;
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,166 +164,176 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-lg px-4 py-6 space-y-6">
-        {/* Theme */}
-        <section className="rounded-xl bg-card p-4 space-y-3">
-          <h3 className="text-sm font-semibold">Appearance</h3>
-          <div className="grid grid-cols-3 gap-2">
-            {themeOptions.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.value}
-                  onClick={() => setTheme(opt.value)}
-                  className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-xs transition-all ${
-                    theme === opt.value
-                      ? "border-primary bg-primary/5 text-foreground"
-                      : "border-border text-muted-foreground hover:border-primary/30"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {opt.label}
-                </button>
-              );
-            })}
+      <main className="mx-auto max-w-lg px-4 py-6 space-y-4">
+
+        {/* Appearance */}
+        <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
+          <div className="px-4 pt-3 pb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Appearance</p>
           </div>
-        </section>
-
-        {/* Notifications */}
-        <section className="rounded-xl bg-card p-4 space-y-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Bell className="h-4 w-4 text-primary" />
-            Notifications
-          </h3>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {notifPermission === "granted" ? "Notifications are enabled" : "Enable push notifications"}
-            </p>
-            <button
-              onClick={handleNotifToggle}
-              className={`rounded-lg p-2 transition-colors ${
-                notifPermission === "granted"
-                  ? "bg-primary/10 text-primary"
-                  : "bg-muted text-muted-foreground hover:bg-secondary"
-              }`}
-            >
-              {notifPermission === "granted" ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-            </button>
-          </div>
-        </section>
-
-        {/* Locations */}
-        <section className="rounded-xl bg-card p-4">
-          <Link to="/locations" className="flex w-full items-center gap-3 text-sm">
-            <MapPin className="h-4 w-4 text-primary" />
-            <span className="flex-1 text-left">My Locations</span>
-            <span className="text-xs text-muted-foreground">Manage saved places</span>
-          </Link>
-        </section>
-
-        {/* Statistics */}
-        <section className="rounded-xl bg-card p-4">
-          <Link to="/statistics" className="flex w-full items-center gap-3 text-sm">
-            <BarChart3 className="h-4 w-4 text-primary" />
-            <span className="flex-1 text-left">Statistics</span>
-            <span className="text-xs text-muted-foreground">View activity overview</span>
-          </Link>
-        </section>
-
-        {/* Export / Import */}
-        <section className="rounded-xl bg-card p-4 space-y-3">
-          <h3 className="text-sm font-semibold">Data</h3>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={exporting}
-              className="flex-1 gap-2"
-            >
-              <Download className="h-4 w-4" />
-              {exporting ? "Exporting..." : "Export"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={importing}
-              className="flex-1 gap-2"
-            >
-              <Upload className="h-4 w-4" />
-              {importing ? "Importing..." : "Import"}
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleImport}
-              className="hidden"
-            />
-          </div>
-          <p className="text-[10px] text-muted-foreground">
-            Export your collections as JSON or import from a backup file.
-          </p>
-        </section>
-
-        {/* Subscription Status */}
-        <section className="rounded-xl bg-card p-4 space-y-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Crown className="h-4 w-4 text-accent" />
-            Subscription
-          </h3>
-          {isSubscribed ? (
-            <p className="text-sm text-primary">✓ Active subscription</p>
-          ) : isTrialActive ? (
-            <div>
-              <p className="text-sm text-muted-foreground">
-                Free trial: <span className="font-semibold text-foreground">{trialDaysLeft} days left</span>
-              </p>
-              <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-accent transition-all"
-                  style={{ width: `${((7 - trialDaysLeft) / 7) * 100}%` }}
-                />
-              </div>
+          <div className="px-4 pb-4">
+            <div className="grid grid-cols-3 gap-2">
+              {themeOptions.map((opt) => {
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setTheme(opt.value)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-xs font-medium transition-all ${
+                      theme === opt.value
+                        ? "border-primary bg-primary/8 text-foreground"
+                        : "border-border text-muted-foreground hover:border-primary/30 hover:bg-secondary/50"
+                    }`}
+                  >
+                    <Icon className={`h-4 w-4 ${theme === opt.value ? "text-primary" : ""}`} />
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
-          ) : (
-            <p className="text-sm text-destructive">Trial expired</p>
-          )}
+          </div>
         </section>
 
-        {/* Tutorial */}
-        <section className="rounded-xl bg-card p-4">
-          <button
+        {/* Reminders & Permissions */}
+        <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reminders</p>
+          </div>
+          <SettingsRow
+            icon={notifPermission === "granted" ? Bell : BellOff}
+            label="Push Notifications"
+            description={notifPermission === "granted" ? "Enabled — you'll receive reminders" : "Tap to enable notifications"}
+            iconColor={notifPermission === "granted" ? "text-primary" : "text-muted-foreground"}
+            onClick={handleNotifToggle}
+            right={
+              <div className={`h-2 w-2 rounded-full ${notifPermission === "granted" ? "bg-green-500" : "bg-muted-foreground/40"}`} />
+            }
+          />
+        </section>
+
+        {/* Navigation */}
+        <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tools</p>
+          </div>
+          <SettingsRow
+            icon={MapPin}
+            label="My Locations"
+            description="Manage saved places for location reminders"
+            href="/locations"
+            right={<div className="text-muted-foreground/40 text-xs">›</div>}
+          />
+          <SettingsRow
+            icon={BarChart3}
+            label="Statistics"
+            description="View your reminder activity overview"
+            href="/statistics"
+            right={<div className="text-muted-foreground/40 text-xs">›</div>}
+          />
+          <SettingsRow
+            icon={BookOpen}
+            label="View Tutorial"
+            description="Replay the onboarding tutorial"
             onClick={onShowTutorial}
-            className="flex w-full items-center gap-3 text-sm"
-          >
-            <BookOpen className="h-4 w-4 text-primary" />
-            <span>View Tutorial Again</span>
-          </button>
+            right={<div className="text-muted-foreground/40 text-xs">›</div>}
+          />
+        </section>
+
+        {/* Data */}
+        <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</p>
+          </div>
+          <SettingsRow
+            icon={Download}
+            label={exporting ? "Exporting..." : "Export Data"}
+            description="Download all collections as JSON backup"
+            onClick={handleExport}
+            iconColor="text-primary"
+          />
+          <SettingsRow
+            icon={Upload}
+            label={importing ? "Importing..." : "Import Data"}
+            description="Restore collections from a backup file"
+            onClick={() => fileInputRef.current?.click()}
+            iconColor="text-primary"
+          />
+          <SettingsRow
+            icon={Sparkles}
+            label={seeding ? "Adding samples..." : "Load Sample Collections"}
+            description="Explore the app with realistic demo data"
+            onClick={handleSeedData}
+            iconColor="text-accent"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImport}
+            className="hidden"
+          />
+        </section>
+
+        {/* Subscription */}
+        <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription</p>
+          </div>
+          <div className="px-4 py-3 flex items-start gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-accent">
+              <Crown className="h-4 w-4" />
+            </div>
+            <div className="flex-1">
+              {isSubscribed ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-primary">Active subscription ✓</span>
+                </div>
+              ) : isTrialActive ? (
+                <div>
+                  <p className="text-sm font-medium">
+                    Free trial — <span className="text-accent">{trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left</span>
+                  </p>
+                  <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-500"
+                      style={{ width: `${trialProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">$0.99/month after trial</p>
+                </div>
+              ) : (
+                <p className="text-sm text-destructive font-medium">Trial expired · Subscribe to continue</p>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* Account */}
-        <section className="rounded-xl bg-card p-4 space-y-3">
-          <h3 className="text-sm font-semibold">Account</h3>
-          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-          <Button variant="outline" size="sm" onClick={signOut} className="w-full gap-2">
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </Button>
+        <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Account</p>
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <Database className="h-4 w-4" />
+              </div>
+              <p className="text-xs text-muted-foreground truncate flex-1">{user.email}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={signOut} className="w-full gap-2">
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </Button>
+          </div>
         </section>
 
         {/* About */}
-        <section className="rounded-xl bg-card p-4 space-y-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Info className="h-4 w-4 text-muted-foreground" />
-            About
-          </h3>
-          <div className="text-xs text-muted-foreground space-y-1">
-            <p>Remind Me — v1.1.0</p>
-            <p>Your personal sentence reminder app with location-based triggers.</p>
-            <p className="pt-1 text-muted-foreground/60">© {new Date().getFullYear()} Remind Me</p>
+        <section className="rounded-xl bg-card border border-border/50 px-4 py-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5" />
+            <span>Remind Me v1.2.0 · Your personal reminder companion</span>
           </div>
+          <p className="mt-1 text-[10px] text-muted-foreground/50 pl-5">© {new Date().getFullYear()} Remind Me. All rights reserved.</p>
         </section>
       </main>
     </div>
