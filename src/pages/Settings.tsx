@@ -7,11 +7,10 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Sun, Moon, Monitor, BookOpen, Crown, LogOut,
   Bell, BellOff, Info, MapPin, BarChart3, Download, Upload,
-  Database, Sparkles
+  Database, ChevronDown, ChevronUp
 } from "lucide-react";
 import { requestNotificationPermission } from "@/lib/notificationScheduler";
 import { downloadExport, importData } from "@/lib/exportImport";
-import { seedSampleData } from "@/lib/sampleData";
 import { useToast } from "@/hooks/use-toast";
 
 interface SettingsProps {
@@ -37,7 +36,7 @@ const SettingsRow = ({
 }) => {
   const inner = (
     <div className="flex items-center gap-3 w-full">
-      <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-muted ${iconColor}`}>
+      <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-muted ${iconColor}`}>
         <Icon className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
@@ -57,7 +56,10 @@ const SettingsRow = ({
   }
 
   return (
-    <button onClick={onClick} className="block w-full p-3 rounded-xl hover:bg-secondary/60 transition-colors text-left">
+    <button
+      onClick={onClick}
+      className="block w-full p-3 rounded-xl hover:bg-secondary/60 transition-colors text-left min-h-[52px]"
+    >
       {inner}
     </button>
   );
@@ -71,13 +73,11 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [seeding, setSeeding] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if ("Notification" in window) {
-      setNotifPermission(Notification.permission);
-    }
+    if ("Notification" in window) setNotifPermission(Notification.permission);
   }, []);
 
   if (loading) {
@@ -131,20 +131,6 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSeedData = async () => {
-    setSeeding(true);
-    try {
-      const result = await seedSampleData(user.id);
-      toast({
-        title: "Sample data added ✓",
-        description: `${result.collections} collections and ${result.sentences} sentences created.`,
-      });
-    } catch {
-      toast({ title: "Failed to add sample data", variant: "destructive" });
-    }
-    setSeeding(false);
-  };
-
   const themeOptions = [
     { value: "light" as const, label: "Light", icon: Sun },
     { value: "dark" as const, label: "Dark", icon: Moon },
@@ -157,7 +143,11 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-4">
-          <Link to="/" className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary transition-colors">
+          <Link
+            to="/"
+            aria-label="Back to collections"
+            className="rounded-lg p-2 text-muted-foreground hover:bg-secondary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+          >
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <h1 className="text-lg font-bold tracking-tight">Settings</h1>
@@ -179,7 +169,8 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
                   <button
                     key={opt.value}
                     onClick={() => setTheme(opt.value)}
-                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-xs font-medium transition-all ${
+                    aria-label={`${opt.label} theme`}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-xs font-medium transition-all min-h-[64px] ${
                       theme === opt.value
                         ? "border-primary bg-primary/8 text-foreground"
                         : "border-border text-muted-foreground hover:border-primary/30 hover:bg-secondary/50"
@@ -194,7 +185,7 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
           </div>
         </section>
 
-        {/* Reminders & Permissions */}
+        {/* Reminders */}
         <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
           <div className="px-4 pt-3 pb-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reminders</p>
@@ -206,12 +197,12 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
             iconColor={notifPermission === "granted" ? "text-primary" : "text-muted-foreground"}
             onClick={handleNotifToggle}
             right={
-              <div className={`h-2 w-2 rounded-full ${notifPermission === "granted" ? "bg-green-500" : "bg-muted-foreground/40"}`} />
+              <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${notifPermission === "granted" ? "bg-green-500" : "bg-muted-foreground/30"}`} />
             }
           />
         </section>
 
-        {/* Navigation */}
+        {/* Tools */}
         <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
           <div className="px-4 pt-3 pb-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tools</p>
@@ -221,57 +212,62 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
             label="My Locations"
             description="Manage saved places for location reminders"
             href="/locations"
-            right={<div className="text-muted-foreground/40 text-xs">›</div>}
+            right={<div className="text-muted-foreground/40 text-sm">›</div>}
           />
           <SettingsRow
             icon={BarChart3}
             label="Statistics"
             description="View your reminder activity overview"
             href="/statistics"
-            right={<div className="text-muted-foreground/40 text-xs">›</div>}
+            right={<div className="text-muted-foreground/40 text-sm">›</div>}
           />
           <SettingsRow
             icon={BookOpen}
             label="View Tutorial"
             description="Replay the onboarding tutorial"
             onClick={onShowTutorial}
-            right={<div className="text-muted-foreground/40 text-xs">›</div>}
+            right={<div className="text-muted-foreground/40 text-sm">›</div>}
           />
         </section>
 
-        {/* Data */}
+        {/* Advanced (collapsed) */}
         <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
-          <div className="px-4 pt-3 pb-1">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Data</p>
-          </div>
-          <SettingsRow
-            icon={Download}
-            label={exporting ? "Exporting..." : "Export Data"}
-            description="Download all collections as JSON backup"
-            onClick={handleExport}
-            iconColor="text-primary"
-          />
-          <SettingsRow
-            icon={Upload}
-            label={importing ? "Importing..." : "Import Data"}
-            description="Restore collections from a backup file"
-            onClick={() => fileInputRef.current?.click()}
-            iconColor="text-primary"
-          />
-          <SettingsRow
-            icon={Sparkles}
-            label={seeding ? "Adding samples..." : "Load Sample Collections"}
-            description="Explore the app with realistic demo data"
-            onClick={handleSeedData}
-            iconColor="text-accent"
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            onChange={handleImport}
-            className="hidden"
-          />
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary/40 transition-colors"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Advanced</p>
+            {showAdvanced ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
+          {showAdvanced && (
+            <div className="border-t border-border/50">
+              <SettingsRow
+                icon={Download}
+                label={exporting ? "Exporting..." : "Export Data"}
+                description="Download all collections as JSON backup"
+                onClick={handleExport}
+                iconColor="text-primary"
+              />
+              <SettingsRow
+                icon={Upload}
+                label={importing ? "Importing..." : "Import Data"}
+                description="Restore collections from a backup file"
+                onClick={() => fileInputRef.current?.click()}
+                iconColor="text-primary"
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleImport}
+                className="hidden"
+              />
+            </div>
+          )}
         </section>
 
         {/* Subscription */}
@@ -280,14 +276,12 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription</p>
           </div>
           <div className="px-4 py-3 flex items-start gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-accent">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-accent">
               <Crown className="h-4 w-4" />
             </div>
             <div className="flex-1">
               {isSubscribed ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-primary">Active subscription ✓</span>
-                </div>
+                <span className="text-sm font-medium text-primary">Active subscription ✓</span>
               ) : isTrialActive ? (
                 <div>
                   <p className="text-sm font-medium">
@@ -299,7 +293,7 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
                       style={{ width: `${trialProgress}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">$0.99/month after trial</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">$2.99/month after trial</p>
                 </div>
               ) : (
                 <p className="text-sm text-destructive font-medium">Trial expired · Subscribe to continue</p>
@@ -315,12 +309,17 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
           </div>
           <div className="px-4 py-3 space-y-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <Database className="h-4 w-4" />
               </div>
               <p className="text-xs text-muted-foreground truncate flex-1">{user.email}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={signOut} className="w-full gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={signOut}
+              className="w-full gap-2 h-11"
+            >
               <LogOut className="h-4 w-4" />
               Sign Out
             </Button>
@@ -331,9 +330,11 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
         <section className="rounded-xl bg-card border border-border/50 px-4 py-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Info className="h-3.5 w-3.5" />
-            <span>Remind Me v1.2.0 · Your personal reminder companion</span>
+            <span>Remind Me v1.3.0 · Your personal reminder companion</span>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground/50 pl-5">© {new Date().getFullYear()} Remind Me. All rights reserved.</p>
+          <p className="mt-1 text-[10px] text-muted-foreground/50 pl-5">
+            © {new Date().getFullYear()} Remind Me. All rights reserved.
+          </p>
         </section>
       </main>
     </div>
