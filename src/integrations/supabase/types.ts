@@ -22,9 +22,11 @@ export type Database = {
           created_at: string
           id: string
           interval_hours: number
+          last_active_date: string | null
           name: string
           preset_type: string | null
           reminder_type: string
+          streak_count: number
           updated_at: string
           user_id: string
         }
@@ -35,9 +37,11 @@ export type Database = {
           created_at?: string
           id?: string
           interval_hours?: number
+          last_active_date?: string | null
           name: string
           preset_type?: string | null
           reminder_type?: string
+          streak_count?: number
           updated_at?: string
           user_id: string
         }
@@ -48,9 +52,11 @@ export type Database = {
           created_at?: string
           id?: string
           interval_hours?: number
+          last_active_date?: string | null
           name?: string
           preset_type?: string | null
           reminder_type?: string
+          streak_count?: number
           updated_at?: string
           user_id?: string
         }

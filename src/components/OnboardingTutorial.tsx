@@ -1,6 +1,9 @@
 import { useState, useRef, TouchEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { BookOpen, Bell, FolderOpen, Sparkles } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { seedSampleData } from "@/lib/sampleData";
+import { useToast } from "@/hooks/use-toast";
 
 const TUTORIAL_KEY = "remind-me-tutorial-complete";
 
@@ -8,7 +11,6 @@ interface OnboardingTutorialProps {
   onComplete: () => void;
 }
 
-/** Swipeable onboarding cards shown on first launch */
 const slides = [
   {
     icon: BookOpen,
@@ -23,19 +25,22 @@ const slides = [
   {
     icon: Bell,
     title: "Smart Reminders",
-    description: "Choose fixed times, random intervals, or let the app surprise you throughout the day.",
+    description: "Choose fixed times, random intervals, location-based triggers, or quick presets for common schedules.",
   },
   {
     icon: Sparkles,
     title: "You're All Set!",
-    description: "Start creating your first collection and add sentences that matter to you.",
+    description: "Start fresh or load example collections to explore every feature right away.",
   },
 ];
 
 const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
   const [current, setCurrent] = useState(0);
+  const [loadingSamples, setLoadingSamples] = useState(false);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   const finish = () => {
     localStorage.setItem(TUTORIAL_KEY, "true");
@@ -51,20 +56,29 @@ const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
     if (current > 0) setCurrent(current - 1);
   };
 
-  /* Swipe gesture handlers */
-  const handleTouchStart = (e: TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
+  const handleLoadSamples = async () => {
+    if (!user) { finish(); return; }
+    setLoadingSamples(true);
+    try {
+      const result = await seedSampleData(user.id);
+      toast({
+        title: "Sample data loaded ✓",
+        description: `${result.collections} collections and ${result.sentences} sentences created.`,
+      });
+    } catch {
+      toast({ title: "Could not load samples", variant: "destructive" });
+    }
+    setLoadingSamples(false);
+    finish();
   };
 
-  const handleTouchMove = (e: TouchEvent) => {
-    touchEndX.current = e.touches[0].clientX;
-  };
-
+  const handleTouchStart = (e: TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchMove = (e: TouchEvent) => { touchEndX.current = e.touches[0].clientX; };
   const handleTouchEnd = () => {
     const diff = touchStartX.current - touchEndX.current;
     const MIN_SWIPE = 50;
-    if (diff > MIN_SWIPE) next();       // swipe left → next
-    else if (diff < -MIN_SWIPE) prev(); // swipe right → prev
+    if (diff > MIN_SWIPE) next();
+    else if (diff < -MIN_SWIPE) prev();
   };
 
   const slide = slides[current];
@@ -79,7 +93,6 @@ const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
       onTouchEnd={handleTouchEnd}
     >
       <div className="w-full max-w-sm px-6 animate-fade-in" key={current}>
-        {/* Slide content */}
         <div className="flex flex-col items-center text-center">
           <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/10">
             <Icon className="h-10 w-10 text-primary" />
@@ -94,6 +107,7 @@ const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
             <button
               key={i}
               onClick={() => setCurrent(i)}
+              aria-label={`Go to slide ${i + 1}`}
               className={`h-2 rounded-full transition-all ${
                 i === current ? "w-6 bg-primary" : "w-2 bg-muted-foreground/20 hover:bg-muted-foreground/40"
               }`}
@@ -103,20 +117,35 @@ const OnboardingTutorial = ({ onComplete }: OnboardingTutorialProps) => {
 
         {/* Actions */}
         <div className="mt-8 space-y-3">
-          <Button onClick={next} className="w-full h-11">
-            {isLast ? "Get Started" : "Next"}
-          </Button>
-          {!isLast && (
-            <button
-              onClick={finish}
-              className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Skip
-            </button>
+          {isLast ? (
+            <>
+              <Button
+                onClick={handleLoadSamples}
+                disabled={loadingSamples}
+                className="w-full h-11"
+              >
+                {loadingSamples ? "Loading..." : "✨ Load Sample Collections"}
+              </Button>
+              <button
+                onClick={finish}
+                className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Start from scratch
+              </button>
+            </>
+          ) : (
+            <>
+              <Button onClick={next} className="w-full h-11">Next</Button>
+              <button
+                onClick={finish}
+                className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Skip
+              </button>
+            </>
           )}
         </div>
 
-        {/* Swipe hint on first slide */}
         {current === 0 && (
           <p className="mt-6 text-center text-[11px] text-muted-foreground/50 animate-pulse">
             Swipe to navigate
