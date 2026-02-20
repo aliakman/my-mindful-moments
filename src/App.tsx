@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import OnboardingTutorial, { TUTORIAL_KEY } from "@/components/OnboardingTutorial";
 import Paywall from "@/components/Paywall";
+import PermissionGate from "@/components/PermissionGate";
 import { useSubscription } from "@/hooks/useSubscription";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -39,7 +40,7 @@ const AppContent = () => {
   }
 
   return (
-    <>
+    <PermissionGate>
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -69,7 +70,7 @@ const AppContent = () => {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-    </>
+    </PermissionGate>
   );
 };
 

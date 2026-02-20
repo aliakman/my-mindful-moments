@@ -68,7 +68,7 @@ const SettingsRow = ({
 const Settings = ({ onShowTutorial }: SettingsProps) => {
   const { user, loading, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { isTrialActive, trialDaysLeft, isSubscribed } = useSubscription();
+  const { isTrialActive, trialDaysLeft, isSubscribed, subscribe } = useSubscription();
   const { toast } = useToast();
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
   const [exporting, setExporting] = useState(false);
@@ -294,6 +294,14 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
                     />
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">$2.99/month after trial</p>
+                  <Button
+                    onClick={subscribe}
+                    size="sm"
+                    className="mt-3 w-full h-10 gap-2"
+                  >
+                    <Crown className="h-3.5 w-3.5" />
+                    Upgrade Now
+                  </Button>
                 </div>
               ) : (
                 <p className="text-sm text-destructive font-medium">Trial expired · Subscribe to continue</p>
