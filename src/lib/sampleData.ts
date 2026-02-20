@@ -1,8 +1,17 @@
 /**
- * Sample collections with realistic dummy data covering all reminder types.
- * Used to demonstrate app features to new users.
+ * Sample collections with realistic dummy data covering all reminder types,
+ * including location-based examples.
  */
 import { supabase } from "@/integrations/supabase/client";
+
+interface SampleSentence {
+  text: string;
+  reminder_time?: string;
+  is_active: boolean;
+  /** If set, will be linked to a sample location by name */
+  location_name?: string;
+  location_trigger_type?: "arrive" | "leave";
+}
 
 interface SampleCollection {
   name: string;
@@ -12,12 +21,16 @@ interface SampleCollection {
   active_hours_end: string;
   interval_hours: number;
   preset_type?: string;
-  sentences: {
-    text: string;
-    reminder_time?: string;
-    is_active: boolean;
-  }[];
+  sentences: SampleSentence[];
 }
+
+/** Sample locations to create for location-based reminders */
+const SAMPLE_LOCATIONS = [
+  { name: "Home", latitude: 48.8566, longitude: 2.3522, radius_meters: 200, color: "#6366f1" },
+  { name: "Office", latitude: 48.8738, longitude: 2.2950, radius_meters: 300, color: "#f59e0b" },
+  { name: "Supermarket", latitude: 48.8600, longitude: 2.3400, radius_meters: 150, color: "#10b981" },
+  { name: "Gym", latitude: 48.8650, longitude: 2.3600, radius_meters: 200, color: "#ef4444" },
+];
 
 const SAMPLE_COLLECTIONS: SampleCollection[] = [
   {
@@ -142,12 +155,100 @@ const SAMPLE_COLLECTIONS: SampleCollection[] = [
       { text: "You are here. You are enough. Breathe.", is_active: true },
     ],
   },
+  // ─── Location-based collections ───────────────────────────────────────
+  {
+    name: "🏠 Home Arrival",
+    reminder_type: "none",
+    active_hours_mode: "always",
+    active_hours_start: "00:00",
+    active_hours_end: "23:59",
+    interval_hours: 1,
+    sentences: [
+      { text: "Welcome home! Take off your shoes and relax 🏠", is_active: true, location_name: "Home", location_trigger_type: "arrive" },
+      { text: "Check the mailbox — you might have packages!", is_active: true, location_name: "Home", location_trigger_type: "arrive" },
+      { text: "Time to take your evening medication 💊", is_active: true, location_name: "Home", location_trigger_type: "arrive" },
+    ],
+  },
+  {
+    name: "🏢 Leaving Office",
+    reminder_type: "none",
+    active_hours_mode: "always",
+    active_hours_start: "00:00",
+    active_hours_end: "23:59",
+    interval_hours: 1,
+    sentences: [
+      { text: "Don't forget your lunch bag and water bottle!", is_active: true, location_name: "Office", location_trigger_type: "leave" },
+      { text: "Great work today! Time to decompress 🎉", is_active: true, location_name: "Office", location_trigger_type: "leave" },
+      { text: "Check your calendar for tomorrow's first meeting.", is_active: true, location_name: "Office", location_trigger_type: "leave" },
+    ],
+  },
+  {
+    name: "🛒 Shopping List",
+    reminder_type: "none",
+    active_hours_mode: "always",
+    active_hours_start: "00:00",
+    active_hours_end: "23:59",
+    interval_hours: 1,
+    sentences: [
+      { text: "Buy milk, eggs, and bread 🥛🥚🍞", is_active: true, location_name: "Supermarket", location_trigger_type: "arrive" },
+      { text: "Check if you need more fruits and vegetables.", is_active: true, location_name: "Supermarket", location_trigger_type: "arrive" },
+      { text: "Don't forget the coffee beans! ☕", is_active: true, location_name: "Supermarket", location_trigger_type: "arrive" },
+    ],
+  },
+  {
+    name: "💪 Gym Motivation",
+    reminder_type: "none",
+    active_hours_mode: "always",
+    active_hours_start: "00:00",
+    active_hours_end: "23:59",
+    interval_hours: 1,
+    sentences: [
+      { text: "You showed up — that's 90% of the work! Let's go 💪", is_active: true, location_name: "Gym", location_trigger_type: "arrive" },
+      { text: "Remember: warm up for 5 minutes before lifting.", is_active: true, location_name: "Gym", location_trigger_type: "arrive" },
+      { text: "Today's focus: consistency over intensity.", is_active: true, location_name: "Gym", location_trigger_type: "arrive" },
+    ],
+  },
 ];
 
 export const seedSampleData = async (userId: string): Promise<{ collections: number; sentences: number }> => {
   let totalCollections = 0;
   let totalSentences = 0;
 
+  // 1. Create sample locations
+  const locationMap = new Map<string, string>(); // name -> id
+
+  for (const loc of SAMPLE_LOCATIONS) {
+    const { data: existing } = await supabase
+      .from("user_locations")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("name", loc.name)
+      .maybeSingle();
+
+    if (existing) {
+      locationMap.set(loc.name, existing.id);
+      continue;
+    }
+
+    const { data: newLoc, error } = await supabase
+      .from("user_locations")
+      .insert({
+        user_id: userId,
+        name: loc.name,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        radius_meters: loc.radius_meters,
+        color: loc.color,
+      })
+      .select("id")
+      .single();
+
+    if (!error && newLoc) {
+      locationMap.set(loc.name, newLoc.id);
+    }
+  }
+
+  // 2. Create collections and sentences
   for (const col of SAMPLE_COLLECTIONS) {
     const { data: newCol, error } = await supabase
       .from("collections")
@@ -171,6 +272,8 @@ export const seedSampleData = async (userId: string): Promise<{ collections: num
       text: s.text,
       reminder_time: s.reminder_time ?? null,
       is_active: s.is_active,
+      location_id: s.location_name ? (locationMap.get(s.location_name) ?? null) : null,
+      location_trigger_type: s.location_trigger_type ?? "arrive",
     }));
 
     const { error: sErr } = await supabase.from("sentences").insert(rows);
