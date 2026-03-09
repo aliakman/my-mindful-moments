@@ -1,11 +1,10 @@
 /**
  * useGeolocation — Handles geolocation permissions and position tracking.
- * Uses the browser Geolocation API for web, designed to swap to
- * @capacitor/geolocation for native builds.
+ * requestPosition now returns a Promise<Position> so callers can await the result.
  */
 import { useState, useEffect, useCallback } from "react";
 
-interface Position {
+export interface Position {
   latitude: number;
   longitude: number;
   accuracy: number;
@@ -23,7 +22,7 @@ export const getDistanceMeters = (
   lat1: number, lon1: number,
   lat2: number, lon2: number
 ): number => {
-  const R = 6371000; // Earth radius in meters
+  const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -42,7 +41,6 @@ export const useGeolocation = (watch = false) => {
     loading: false,
   });
 
-  // Check permission status on mount
   useEffect(() => {
     if (!("geolocation" in navigator)) {
       setState((s) => ({ ...s, permissionStatus: "unavailable" }));
@@ -58,39 +56,44 @@ export const useGeolocation = (watch = false) => {
     }
   }, []);
 
-  /** Request permission and get current position */
-  const requestPosition = useCallback(() => {
+  /** Request permission and get current position. Returns the position or null. */
+  const requestPosition = useCallback((): Promise<Position | null> => {
     if (!("geolocation" in navigator)) {
       setState((s) => ({ ...s, error: "Geolocation not available", permissionStatus: "unavailable" }));
-      return;
+      return Promise.resolve(null);
     }
     setState((s) => ({ ...s, loading: true, error: null }));
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setState({
-          position: {
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const position: Position = {
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
             accuracy: pos.coords.accuracy,
-          },
-          error: null,
-          permissionStatus: "granted",
-          loading: false,
-        });
-      },
-      (err) => {
-        setState((s) => ({
-          ...s,
-          error: err.message,
-          permissionStatus: err.code === 1 ? "denied" : s.permissionStatus,
-          loading: false,
-        }));
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-    );
+          };
+          setState({
+            position,
+            error: null,
+            permissionStatus: "granted",
+            loading: false,
+          });
+          resolve(position);
+        },
+        (err) => {
+          console.error("[Geolocation] Error:", err.message, `(code ${err.code})`);
+          setState((s) => ({
+            ...s,
+            error: err.message,
+            permissionStatus: err.code === 1 ? "denied" : s.permissionStatus,
+            loading: false,
+          }));
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+      );
+    });
   }, []);
 
-  // Optional: watch position continuously
   useEffect(() => {
     if (!watch || !("geolocation" in navigator)) return;
     const id = navigator.geolocation.watchPosition(

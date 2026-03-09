@@ -2,37 +2,29 @@ import { useState, useEffect, useRef } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
-import { useSubscription } from "@/hooks/useSubscription";
+import { useSubscription, PLANS } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft, Sun, Moon, Monitor, BookOpen, Crown, LogOut,
   Bell, BellOff, Info, MapPin, BarChart3, Download, Upload,
-  Database, ChevronDown, ChevronUp
+  Database, ChevronDown, ChevronUp, UserCircle, ArrowRight
 } from "lucide-react";
 import { requestNotificationPermission } from "@/lib/notificationScheduler";
 import { downloadExport, importData } from "@/lib/exportImport";
 import { useToast } from "@/hooks/use-toast";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface SettingsProps {
   onShowTutorial: () => void;
 }
 
 const SettingsRow = ({
-  icon: Icon,
-  label,
-  description,
-  onClick,
-  href,
-  right,
-  iconColor = "text-primary",
+  icon: Icon, label, description, onClick, href, right, iconColor = "text-primary",
 }: {
-  icon: React.ElementType;
-  label: string;
-  description?: string;
-  onClick?: () => void;
-  href?: string;
-  right?: React.ReactNode;
-  iconColor?: string;
+  icon: React.ElementType; label: string; description?: string;
+  onClick?: () => void; href?: string; right?: React.ReactNode; iconColor?: string;
 }) => {
   const inner = (
     <div className="flex items-center gap-3 w-full">
@@ -66,14 +58,21 @@ const SettingsRow = ({
 };
 
 const Settings = ({ onShowTutorial }: SettingsProps) => {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, signOut, isGuest, linkAccount } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { isTrialActive, trialDaysLeft, isSubscribed, subscribe } = useSubscription();
+  const {
+    isTrialActive, trialDaysLeft, isSubscribed, currentPlan,
+    subscribe, confirmPurchase, cancelPurchase, pendingPlan,
+  } = useSubscription();
   const { toast } = useToast();
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showLinkForm, setShowLinkForm] = useState(false);
+  const [linkEmail, setLinkEmail] = useState("");
+  const [linkPassword, setLinkPassword] = useState("");
+  const [linking, setLinking] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -131,6 +130,20 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleLinkAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkEmail.trim() || !linkPassword.trim()) return;
+    setLinking(true);
+    const { error } = await linkAccount(linkEmail, linkPassword);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Account created ✓", description: "Your guest data has been transferred to your new account." });
+      setShowLinkForm(false);
+    }
+    setLinking(false);
+  };
+
   const themeOptions = [
     { value: "light" as const, label: "Light", icon: Sun },
     { value: "dark" as const, label: "Dark", icon: Moon },
@@ -138,6 +151,7 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
   ];
 
   const trialProgress = ((7 - trialDaysLeft) / 7) * 100;
+  const pendingPlanData = PLANS.find((p) => p.id === pendingPlan);
 
   return (
     <div className="min-h-screen bg-background">
@@ -155,6 +169,67 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-6 space-y-4">
+
+        {/* Guest banner */}
+        {isGuest && (
+          <section className="rounded-xl border border-accent/30 bg-accent/5 p-4 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <UserCircle className="h-5 w-5 text-accent shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold">You're using a Guest account</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Create an account to save your data permanently. Your reminders will be transferred.
+                </p>
+                {!showLinkForm ? (
+                  <Button
+                    size="sm"
+                    onClick={() => setShowLinkForm(true)}
+                    className="mt-3 h-9 gap-1.5"
+                  >
+                    Create Account
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                ) : (
+                  <form onSubmit={handleLinkAccount} className="mt-3 space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="link-email" className="text-xs text-muted-foreground">Email</Label>
+                      <Input
+                        id="link-email"
+                        type="email"
+                        value={linkEmail}
+                        onChange={(e) => setLinkEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        required
+                        className="h-9 bg-background"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="link-pass" className="text-xs text-muted-foreground">Password</Label>
+                      <Input
+                        id="link-pass"
+                        type="password"
+                        value={linkPassword}
+                        onChange={(e) => setLinkPassword(e.target.value)}
+                        placeholder="Min 6 characters"
+                        required
+                        minLength={6}
+                        className="h-9 bg-background"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" size="sm" disabled={linking} className="h-9">
+                        {linking ? "Saving..." : "Save Account"}
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setShowLinkForm(false)} className="h-9">
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Appearance */}
         <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
@@ -207,65 +282,22 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
           <div className="px-4 pt-3 pb-1">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tools</p>
           </div>
-          <SettingsRow
-            icon={MapPin}
-            label="My Locations"
-            description="Manage saved places for location reminders"
-            href="/locations"
-            right={<div className="text-muted-foreground/40 text-sm">›</div>}
-          />
-          <SettingsRow
-            icon={BarChart3}
-            label="Statistics"
-            description="View your reminder activity overview"
-            href="/statistics"
-            right={<div className="text-muted-foreground/40 text-sm">›</div>}
-          />
-          <SettingsRow
-            icon={BookOpen}
-            label="View Tutorial"
-            description="Replay the onboarding tutorial"
-            onClick={onShowTutorial}
-            right={<div className="text-muted-foreground/40 text-sm">›</div>}
-          />
+          <SettingsRow icon={MapPin} label="My Locations" description="Manage saved places for location reminders" href="/locations" right={<div className="text-muted-foreground/40 text-sm">›</div>} />
+          <SettingsRow icon={BarChart3} label="Statistics" description="View your reminder activity overview" href="/statistics" right={<div className="text-muted-foreground/40 text-sm">›</div>} />
+          <SettingsRow icon={BookOpen} label="View Tutorial" description="Replay the onboarding tutorial" onClick={onShowTutorial} right={<div className="text-muted-foreground/40 text-sm">›</div>} />
         </section>
 
-        {/* Advanced (collapsed) */}
+        {/* Advanced */}
         <section className="rounded-xl bg-card border border-border/50 overflow-hidden">
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary/40 transition-colors"
-          >
+          <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex w-full items-center justify-between px-4 py-3 hover:bg-secondary/40 transition-colors">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Advanced</p>
-            {showAdvanced ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
+            {showAdvanced ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
           {showAdvanced && (
             <div className="border-t border-border/50">
-              <SettingsRow
-                icon={Download}
-                label={exporting ? "Exporting..." : "Export Data"}
-                description="Download all collections as JSON backup"
-                onClick={handleExport}
-                iconColor="text-primary"
-              />
-              <SettingsRow
-                icon={Upload}
-                label={importing ? "Importing..." : "Import Data"}
-                description="Restore collections from a backup file"
-                onClick={() => fileInputRef.current?.click()}
-                iconColor="text-primary"
-              />
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                className="hidden"
-              />
+              <SettingsRow icon={Download} label={exporting ? "Exporting..." : "Export Data"} description="Download all collections as JSON backup" onClick={handleExport} />
+              <SettingsRow icon={Upload} label={importing ? "Importing..." : "Import Data"} description="Restore collections from a backup file" onClick={() => fileInputRef.current?.click()} />
+              <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
             </div>
           )}
         </section>
@@ -281,24 +313,24 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
             </div>
             <div className="flex-1">
               {isSubscribed ? (
-                <span className="text-sm font-medium text-primary">Active subscription ✓</span>
+                <div>
+                  <span className="text-sm font-medium text-primary">Active subscription ✓</span>
+                  {currentPlan && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {PLANS.find(p => p.id === currentPlan)?.label} plan — {PLANS.find(p => p.id === currentPlan)?.price}
+                    </p>
+                  )}
+                </div>
               ) : isTrialActive ? (
                 <div>
                   <p className="text-sm font-medium">
                     Free trial — <span className="text-accent">{trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left</span>
                   </p>
                   <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-accent transition-all duration-500"
-                      style={{ width: `${trialProgress}%` }}
-                    />
+                    <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${trialProgress}%` }} />
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">$2.99/month after trial</p>
-                  <Button
-                    onClick={subscribe}
-                    size="sm"
-                    className="mt-3 w-full h-10 gap-2"
-                  >
+                  <p className="text-[10px] text-muted-foreground mt-1">$4.99/month after trial</p>
+                  <Button onClick={() => subscribe("annual")} size="sm" className="mt-3 w-full h-10 gap-2">
                     <Crown className="h-3.5 w-3.5" />
                     Upgrade Now
                   </Button>
@@ -320,14 +352,11 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                 <Database className="h-4 w-4" />
               </div>
-              <p className="text-xs text-muted-foreground truncate flex-1">{user.email}</p>
+              <p className="text-xs text-muted-foreground truncate flex-1">
+                {isGuest ? "Guest account" : user.email}
+              </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={signOut}
-              className="w-full gap-2 h-11"
-            >
+            <Button variant="outline" size="sm" onClick={signOut} className="w-full gap-2 h-11">
               <LogOut className="h-4 w-4" />
               Sign Out
             </Button>
@@ -338,13 +367,25 @@ const Settings = ({ onShowTutorial }: SettingsProps) => {
         <section className="rounded-xl bg-card border border-border/50 px-4 py-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Info className="h-3.5 w-3.5" />
-            <span>Remind Me v1.3.0 · Your personal reminder companion</span>
+            <span>Remind Me v1.4.0 · Your personal reminder companion</span>
           </div>
           <p className="mt-1 text-[10px] text-muted-foreground/50 pl-5">
             © {new Date().getFullYear()} Remind Me. All rights reserved.
           </p>
         </section>
       </main>
+
+      {/* Purchase confirmation dialog */}
+      <ConfirmDialog
+        open={!!pendingPlan}
+        onOpenChange={(open) => { if (!open) cancelPurchase(); }}
+        title="Confirm Purchase"
+        description={pendingPlanData
+          ? `Subscribe to the ${pendingPlanData.label} plan for ${pendingPlanData.price} ${pendingPlanData.sub}? You can cancel anytime.`
+          : ""}
+        onConfirm={confirmPurchase}
+        confirmLabel="Confirm & Subscribe"
+      />
     </div>
   );
 };

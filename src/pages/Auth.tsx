@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { BookOpen, ArrowRight, ArrowLeft } from "lucide-react";
+import { BookOpen, ArrowRight, ArrowLeft, UserCircle } from "lucide-react";
 
 type AuthMode = "login" | "signup" | "forgot";
 
 const Auth = () => {
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, signIn, signUp, signInAsGuest } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -72,6 +72,15 @@ const Auth = () => {
     setSubmitting(false);
   };
 
+  const handleGuestLogin = async () => {
+    setSubmitting(true);
+    const { error } = await signInAsGuest();
+    if (error) {
+      toast({ title: "Guest login failed", description: error.message, variant: "destructive" });
+    }
+    setSubmitting(false);
+  };
+
   const title = mode === "login" ? "Welcome back" : mode === "signup" ? "Create your account" : "Reset password";
 
   return (
@@ -119,7 +128,6 @@ const Auth = () => {
             </div>
           )}
 
-          {/* Forgot password link (only on login) */}
           {mode === "login" && (
             <div className="text-right">
               <button
@@ -143,6 +151,25 @@ const Auth = () => {
             {!submitting && <ArrowRight className="h-4 w-4" />}
           </Button>
         </form>
+
+        {/* Guest login */}
+        <div className="mt-4">
+          <div className="relative flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <span className="relative bg-background px-3 text-xs text-muted-foreground">or</span>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleGuestLogin}
+            disabled={submitting}
+            className="mt-4 h-11 w-full gap-2 text-muted-foreground"
+          >
+            <UserCircle className="h-4 w-4" />
+            Continue as Guest
+          </Button>
+        </div>
 
         <div className="mt-6 text-center text-sm text-muted-foreground">
           {mode === "forgot" ? (
