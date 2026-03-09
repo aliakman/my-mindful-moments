@@ -1,14 +1,14 @@
 /**
  * PermissionGate — Requests all permissions once after login.
- * Shows a brief permission request screen, then never again.
+ * Only shows when a user is authenticated. Skips for guests/unauthenticated.
  */
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Bell, MapPin, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Bell, MapPin, ShieldCheck, AlertTriangle, ExternalLink } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import {
   hasCompletedPermissionFlow,
   requestAllPermissions,
-  getPermissionStatus,
   type PermissionStatus,
 } from "@/lib/permissionManager";
 
@@ -17,33 +17,39 @@ interface PermissionGateProps {
 }
 
 const PermissionGate = ({ children }: PermissionGateProps) => {
+  const { user, loading } = useAuth();
   const [needsPermission, setNeedsPermission] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [result, setResult] = useState<PermissionStatus | null>(null);
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
+    // Don't show permission gate until auth is resolved
+    if (loading) return;
+    // Don't show for unauthenticated users (they need to login first)
+    if (!user) {
+      setChecked(true);
+      return;
+    }
     if (hasCompletedPermissionFlow()) {
       setChecked(true);
       return;
     }
     setNeedsPermission(true);
     setChecked(true);
-  }, []);
+  }, [user, loading]);
 
-  if (!checked) return null;
+  if (!checked || loading) return null;
   if (!needsPermission) return <>{children}</>;
 
   const handleAllow = async () => {
     setRequesting(true);
     const status = await requestAllPermissions();
     setResult(status);
-    // Brief pause to show result
     setTimeout(() => setNeedsPermission(false), 1200);
   };
 
   const handleSkip = () => {
-    // Mark as completed even if skipped
     localStorage.setItem("remind-me-permissions-granted", "true");
     setNeedsPermission(false);
   };
@@ -70,9 +76,21 @@ const PermissionGate = ({ children }: PermissionGateProps) => {
             {allGranted ? "All set!" : "Permissions updated"}
           </h2>
           {anyDenied && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              Some permissions were denied. You can enable them later in your device settings.
-            </p>
+            <div className="mt-3 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Some permissions were denied. You can enable them in your device settings for full functionality.
+              </p>
+              <button
+                onClick={() => {
+                  // On web, we can't open settings. On native, guide the user.
+                  window.open("app-settings:", "_system");
+                }}
+                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open Device Settings
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -1,8 +1,8 @@
 /**
  * Locations — Manage saved places for location-based reminders.
- * Supports colored dot indicators, interactive map picker, and custom radius.
+ * Interactive Leaflet map picker, GPS auto-fill, custom radius.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -14,9 +14,11 @@ import { Slider } from "@/components/ui/slider";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { ArrowLeft, Plus, MapPin, Trash2, Navigation, ChevronDown, ChevronUp } from "lucide-react";
 import { LOCATION_COLORS, getNextColor } from "@/lib/locationColors";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+
+const LOG = "[Locations]";
 
 // Fix Leaflet default marker icons in Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -35,17 +37,27 @@ interface UserLocation {
   color: string;
 }
 
-/** Inner component that handles map click events */
-const MapClickHandler = ({
-  onPick,
-}: {
-  onPick: (lat: number, lng: number) => void;
-}) => {
+/** Handles map click → sets picked coordinates */
+const MapClickHandler = ({ onPick }: { onPick: (lat: number, lng: number) => void }) => {
   useMapEvents({
     click(e) {
+      console.log(`${LOG} Map tapped: ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`);
       onPick(e.latlng.lat, e.latlng.lng);
     },
   });
+  return null;
+};
+
+/** Flies map to a new center without remounting */
+const MapFlyTo = ({ center }: { center: [number, number] }) => {
+  const map = useMap();
+  const prevCenter = useRef(center);
+  useEffect(() => {
+    if (center[0] !== prevCenter.current[0] || center[1] !== prevCenter.current[1]) {
+      map.flyTo(center, 15, { duration: 0.8 });
+      prevCenter.current = center;
+    }
+  }, [center, map]);
   return null;
 };
 
@@ -69,16 +81,24 @@ const Locations = () => {
   }, [user]);
 
   const fetchLocations = async () => {
-    const { data } = await supabase
+    console.log(`${LOG} Fetching locations...`);
+    const { data, error } = await supabase
       .from("user_locations")
       .select("*")
       .order("created_at", { ascending: false });
-    if (data) setLocations(data as UserLocation[]);
+    if (error) {
+      console.error(`${LOG} Fetch error:`, error.message);
+    }
+    if (data) {
+      console.log(`${LOG} Loaded ${data.length} locations`);
+      setLocations(data as UserLocation[]);
+    }
   };
 
-  // Auto-fill from GPS when form opens
+  // Auto-fill GPS when form opens (only if no coords set yet)
   useEffect(() => {
     if (position && showForm && lat === null) {
+      console.log(`${LOG} Auto-filling GPS: ${position.latitude}, ${position.longitude}`);
       setLat(position.latitude);
       setLng(position.longitude);
     }
@@ -89,8 +109,12 @@ const Locations = () => {
   }, [showForm]);
 
   const saveLocation = async () => {
-    if (!name.trim() || lat === null || lng === null || !user) return;
+    if (!name.trim() || lat === null || lng === null || !user) {
+      console.warn(`${LOG} Save blocked: name=${name.trim()}, lat=${lat}, lng=${lng}`);
+      return;
+    }
     setSaving(true);
+    console.log(`${LOG} Saving "${name.trim()}" at ${lat}, ${lng}, radius=${radius}m`);
     const { error } = await supabase.from("user_locations").insert({
       user_id: user.id,
       name: name.trim(),
@@ -100,8 +124,10 @@ const Locations = () => {
       color: selectedColor,
     });
     if (error) {
+      console.error(`${LOG} Save error:`, error.message);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
+      console.log(`${LOG} Location saved successfully`);
       resetForm();
       fetchLocations();
       toast({ title: "Location saved", description: `"${name.trim()}" added.` });
@@ -111,6 +137,7 @@ const Locations = () => {
 
   const deleteLocation = async () => {
     if (!deleteTarget) return;
+    console.log(`${LOG} Deleting location: ${deleteTarget.name}`);
     await supabase.from("user_locations").delete().eq("id", deleteTarget.id);
     setDeleteTarget(null);
     fetchLocations();
@@ -126,10 +153,21 @@ const Locations = () => {
   };
 
   const handleUseCurrentLocation = async () => {
-    await requestPosition();
-    if (position) {
-      setLat(position.latitude);
-      setLng(position.longitude);
+    console.log(`${LOG} Requesting GPS position...`);
+    const pos = await requestPosition();
+    if (pos) {
+      console.log(`${LOG} GPS acquired: ${pos.latitude}, ${pos.longitude}`);
+      setLat(pos.latitude);
+      setLng(pos.longitude);
+    } else {
+      console.warn(`${LOG} GPS position unavailable`);
+      toast({
+        title: "Location unavailable",
+        description: permissionStatus === "denied"
+          ? "Location access denied. Enable it in your device settings."
+          : "Could not get your position. Try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -144,7 +182,8 @@ const Locations = () => {
 
   const mapCenter: [number, number] = lat !== null && lng !== null
     ? [lat, lng]
-    : [48.8566, 2.3522]; // default Paris
+    : position ? [position.latitude, position.longitude]
+    : [48.8566, 2.3522];
 
   return (
     <div className="min-h-screen bg-background">
@@ -220,21 +259,35 @@ const Locations = () => {
                 </Button>
               </div>
 
-              {/* Interactive map */}
+              {/* Interactive map — no key prop, uses flyTo instead */}
               <div className="rounded-xl overflow-hidden border border-border h-56">
                 <MapContainer
                   center={mapCenter}
-                  zoom={13}
+                  zoom={14}
                   style={{ height: "100%", width: "100%" }}
-                  key={`${mapCenter[0]}-${mapCenter[1]}`}
+                  scrollWheelZoom={true}
+                  zoomControl={false}
                 >
                   <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
                   <MapClickHandler onPick={(la, ln) => { setLat(la); setLng(ln); }} />
+                  <MapFlyTo center={mapCenter} />
                   {lat !== null && lng !== null && (
-                    <Marker position={[lat, lng]} />
+                    <>
+                      <Marker position={[lat, lng]} />
+                      <Circle
+                        center={[lat, lng]}
+                        radius={radius}
+                        pathOptions={{
+                          color: selectedColor,
+                          fillColor: selectedColor,
+                          fillOpacity: 0.15,
+                          weight: 2,
+                        }}
+                      />
+                    </>
                   )}
                 </MapContainer>
               </div>
@@ -275,7 +328,7 @@ const Locations = () => {
             <div className="flex gap-2 pt-1">
               <Button
                 onClick={saveLocation}
-                disabled={saving || lat === null}
+                disabled={saving || lat === null || !name.trim()}
                 size="sm"
                 className="h-11 px-5"
               >

@@ -1,42 +1,10 @@
 import { useState } from "react";
-import { useSubscription } from "@/hooks/useSubscription";
+import { useSubscription, PLANS } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { Crown, Check, RotateCcw } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 type PlanId = "monthly" | "annual" | "lifetime";
-
-interface Plan {
-  id: PlanId;
-  label: string;
-  price: string;
-  sub: string;
-  badge?: string;
-  savings?: string;
-}
-
-const PLANS: Plan[] = [
-  {
-    id: "annual",
-    label: "Annual",
-    price: "$19.99",
-    sub: "per year",
-    badge: "Best Value",
-    savings: "Save 44%",
-  },
-  {
-    id: "monthly",
-    label: "Monthly",
-    price: "$2.99",
-    sub: "per month",
-  },
-  {
-    id: "lifetime",
-    label: "Lifetime",
-    price: "$29.99",
-    sub: "one-time payment",
-    savings: "Pay once, keep forever",
-  },
-];
 
 const features = [
   "Unlimited collections & sentences",
@@ -46,10 +14,11 @@ const features = [
   "Statistics & streak tracking",
 ];
 
-/** Paywall screen shown when trial expires and user is not subscribed */
 const Paywall = () => {
-  const { subscribe, restorePurchases } = useSubscription();
+  const { subscribe, confirmPurchase, cancelPurchase, pendingPlan, restorePurchases } = useSubscription();
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("annual");
+
+  const pendingPlanData = PLANS.find((p) => p.id === pendingPlan);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background px-4 overflow-y-auto">
@@ -112,7 +81,10 @@ const Paywall = () => {
 
         {/* CTA */}
         <div className="mt-5 space-y-3">
-          <Button onClick={subscribe} className="w-full h-12 text-base font-semibold">
+          <Button
+            onClick={() => subscribe(selectedPlan)}
+            className="w-full h-12 text-base font-semibold"
+          >
             Subscribe Now
           </Button>
           <button
@@ -128,6 +100,18 @@ const Paywall = () => {
           Cancel anytime. Subscription renews automatically.
         </p>
       </div>
+
+      {/* Confirmation dialog — prevents auto-subscribe */}
+      <ConfirmDialog
+        open={!!pendingPlan}
+        onOpenChange={(open) => { if (!open) cancelPurchase(); }}
+        title="Confirm Purchase"
+        description={pendingPlanData
+          ? `Subscribe to the ${pendingPlanData.label} plan for ${pendingPlanData.price} ${pendingPlanData.sub}? You can cancel anytime.`
+          : ""}
+        onConfirm={confirmPurchase}
+        confirmLabel="Confirm & Subscribe"
+      />
     </div>
   );
 };
